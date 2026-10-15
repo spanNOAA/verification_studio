@@ -640,46 +640,50 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None, force_fetch=Fa
             if is_remote:
                 target_cluster = cluster
                 cands_clean = [reject_pty_control_chars(c) for c in candidates]
-                escaped_cands = " ".join(shlex.quote(c) for c in cands_clean)
-                check_script = f'for cand in {escaped_cands}; do if [ -f "$cand" ]; then base64 -w 0 "$cand"; exit 0; fi; done'
+                downloaded = False
                 try:
-                    res = subprocess.run(
-                        [hpc_bin, target_cluster, check_script],
-                        capture_output=True,
-                        text=True,
-                        timeout=8,
-                        env=env
-                    )
-                    if res.returncode == 0 and res.stdout.strip():
-                        data = base64.b64decode(res.stdout.strip())
-                        atomic_write_bytes(local_path, data)
-                        print(f"  [CACHE MISS] Downloaded fresh image: {local_filename} from {target_cluster} ({len(data)} bytes)", flush=True)
-                    else:
+                    for cand in cands_clean:
+                        try:
+                            res = subprocess.run(
+                                [hpc_bin, target_cluster, "download", cand, local_path],
+                                capture_output=True,
+                                text=True,
+                                timeout=15,
+                                env=env
+                            )
+                            if res.returncode == 0 and os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+                                sz = os.path.getsize(local_path)
+                                print(f"  [CACHE MISS] Downloaded fresh image: {local_filename} from {target_cluster} ({sz} bytes)", flush=True)
+                                downloaded = True
+                                break
+                        except subprocess.TimeoutExpired:
+                            pass
+
+                    if not downloaded:
                         print(f"  [NOTICE] No remote radar image found for {local_filename} on {target_cluster}:{base_path}", flush=True)
-                        if res.returncode != 0 and not is_hpc_online(target_cluster):
+                        if not is_hpc_online(target_cluster):
                             print(f"  [WARNING] HPC cluster '{target_cluster}' connection dropped. Prompting to reconnect...", flush=True)
                             if ensure_hpc_connection(target_cluster, models=models):
                                 print(f"  [SUCCESS] Reconnected to '{target_cluster}'! Retrying {local_filename}...", flush=True)
-                                try:
-                                    res_retry = subprocess.run([hpc_bin, target_cluster, check_script], capture_output=True, text=True, timeout=8, env=env)
-                                    if res_retry.returncode == 0 and res_retry.stdout.strip():
-                                        data = base64.b64decode(res_retry.stdout.strip())
-                                        atomic_write_bytes(local_path, data)
-                                        print(f"  [CACHE MISS] Downloaded fresh image: {local_filename} from {target_cluster} ({len(data)} bytes)", flush=True)
-                                except Exception:
-                                    pass
+                                for cand in cands_clean:
+                                    try:
+                                        res_retry = subprocess.run(
+                                            [hpc_bin, target_cluster, "download", cand, local_path],
+                                            capture_output=True,
+                                            text=True,
+                                            timeout=15,
+                                            env=env
+                                        )
+                                        if res_retry.returncode == 0 and os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+                                            sz = os.path.getsize(local_path)
+                                            print(f"  [CACHE MISS] Downloaded fresh image: {local_filename} from {target_cluster} ({sz} bytes)", flush=True)
+                                            downloaded = True
+                                            break
+                                    except Exception:
+                                        pass
                             else:
                                 print(f"  [NOTICE] Re-authentication cancelled or failed. Skipping remaining remote checks for [{short_name}].", flush=True)
                                 break
-                except subprocess.TimeoutExpired:
-                    print(f"  [WARNING] Remote check timed out on {target_cluster} for {local_filename}.", flush=True)
-                    if not is_hpc_online(target_cluster):
-                        print(f"  [WARNING] HPC cluster '{target_cluster}' connection dropped. Prompting to reconnect...", flush=True)
-                        if ensure_hpc_connection(target_cluster, models=models):
-                            print(f"  [SUCCESS] Reconnected to '{target_cluster}'! Continuing...", flush=True)
-                        else:
-                            print(f"  [NOTICE] Re-authentication cancelled or failed. Skipping remaining remote checks for [{short_name}].", flush=True)
-                            break
                 except Exception as e:
                     print(f"  [WARNING] Error fetching remote {local_filename}: {e}", flush=True)
             else:
