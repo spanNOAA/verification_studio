@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOAA GSL MATS Verification & Reporting Studio</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    input, textarea { user-select: text; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      line-height: 1.5;
+      padding-bottom: 24px;
+    }
+    .header {
+      background: linear-gradient(135deg, #102C57 0%, #164e63 100%);
+      color: #ffffff;
+      padding: 16px 24px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .header h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .header p { color: #bae6fd; font-size: 12px; margin-top: 3px; }
+    .container {
+      max-width: 980px;
+      margin: 16px auto;
+      padding: 0 16px;
+      transition: max-width 0.25s ease;
+    }
+    .layout-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .layout-left {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .layout-right {
+      display: flex;
+      flex-direction: column;
+    }
+    .actions-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 12px 16px;
+      background: #ffffff;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      padding: 18px 20px;
+      margin-bottom: 0px;
+      border: 1px solid #e2e8f0;
+    }
+    .card-title {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: #1e3a8a;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1.5px solid #f1f5f9;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .form-group { margin-bottom: 12px; }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 4px;
+    }
+    .form-hint { font-size: 11.5px; color: #64748b; margin-top: 3px; }
+    .form-control {
+      width: 100%;
+      padding: 8px 11px;
+      font-size: 13px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+      font-family: inherit;
+      background: #fdfdfd;
+    }
+    .form-control:focus {
+      outline: none;
+      border-color: #2563eb;
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+    textarea.form-control {
+      font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.6;
+      resize: none;
+    }
+    .input-row { display: flex; gap: 8px; }
+    .date-range-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dt-field-group {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 6px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .dt-field-group:hover {
+      border-color: #94a3b8;
+    }
+    .dt-field-group:focus-within {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+    .dt-badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      padding: 0 9px;
+      background: #f1f5f9;
+      border-right: 1px solid #cbd5e1;
+      line-height: 34px;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .dt-input {
+      border: none !important;
+      background: transparent !important;
+      padding: 6px 10px !important;
+      font-size: 13px !important;
+      font-family: inherit !important;
+      color: #1e293b !important;
+      flex: 1 !important;
+      outline: none !important;
+      cursor: pointer !important;
+      font-weight: 600;
+      box-shadow: none !important;
+      letter-spacing: 0.2px;
+    }
+    .dt-calendar-btn {
+      padding: 0 10px;
+      font-size: 15px;
+      color: #64748b;
+      user-select: none;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    .dt-calendar-btn:hover {
+      transform: scale(1.15);
+    }
+    .date-separator {
+      font-size: 14px;
+      font-weight: bold;
+      color: #94a3b8;
+      user-select: none;
+    }
+
+    /* Unified Popover Calendar & Time Picker */
+    .dt-picker-modal {
+      position: fixed;
+      z-index: 99999;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.22), 0 8px 12px -6px rgba(0, 0, 0, 0.12);
+      padding: 12px 14px;
+      width: 290px;
+      max-height: calc(100vh - 20px);
+      overflow-y: auto;
+      user-select: none;
+    }
+    .dt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .dt-month-year {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .dt-nav-btn {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 12px;
+      color: #334155;
+      transition: all 0.15s ease;
+    }
+    .dt-nav-btn:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    .dt-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+    .dt-days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2.5px;
+    }
+    .dt-day-cell {
+      height: 27px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11.5px;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #1e293b;
+      transition: all 0.12s ease;
+    }
+    .dt-day-cell:hover:not(.empty) {
+      background: #eff6ff;
+      color: #2563eb;
+      font-weight: 600;
+    }
+    .dt-day-cell.selected {
+      background: #2563eb !important;
+      color: #ffffff !important;
+      font-weight: 700;
+    }
+    .dt-day-cell.today {
+      border: 1px solid #2563eb;
+      font-weight: 600;
+    }
+    .dt-day-cell.empty {
+      cursor: default;
+      color: #cbd5e1;
+    }
+    .dt-time-section {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .dt-time-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #475569;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dt-time-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .dt-time-select {
+      flex: 1;
+      padding: 4px 6px;
+      font-size: 12px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 5px;
+      background: #f8fafc;
+      color: #1e293b;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+    .dt-time-select:focus {
+      border-color: #2563eb;
+      background: #ffffff;
+    }
+    .dt-quick-chips {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .dt-chip {
+      flex: 1;
+      padding: 3px 0;
+      font-size: 10.5px;
+      font-weight: 600;
+      text-align: center;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #334155;
+      transition: all 0.12s ease;
+    }
+    .dt-chip:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    .dt-chip.active {
+      background: #dbeafe;
+      border-color: #3b82f6;
+      color: #1d4ed8;
+      font-weight: 700;
+    }
+    .dt-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      padding-top: 6px;
+      border-top: 1px solid #f1f5f9;
+    }
+    .row { display: flex; gap: 14px; flex-wrap: wrap; }
+    .col { flex: 1; min-width: 240px; }
+    .badge {
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+    }
+    .badge.warn {
+      background: #fff1f2;
+      color: #be123c;
+      border-color: #fecdd3;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: #16a34a;
+      color: #ffffff;
+      font-size: 15px;
+      padding: 10px 24px;
+      box-shadow: 0 2px 4px rgba(22, 163, 74, 0.25);
+    }
+    .btn-primary:hover:not(:disabled) { background: #15803d; }
+    .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-secondary { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+    .btn-secondary:hover { background: #e2e8f0; color: #0f172a; }
+    .btn-sm { padding: 3px 8px; font-size: 11.5px; }
+    .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .terminal-card {
+      padding: 14px 16px;
+    }
+    .terminal-box {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      height: 240px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      border: 1px solid #1e293b;
+    }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .pulse {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #16a34a;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+    }
+
+    /* Composite Reflectivity Dedicated Card Styles */
+    .radar-creator-box {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 11px 13px;
+      margin-top: 8px;
+    }
+    .cref-hour-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #334155;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+    }
+    .cref-hour-pill:hover {
+      background: #e2e8f0;
+    }
+    .cref-hour-pill.active {
+      background: #0284c7;
+      color: #ffffff;
+      border-color: #0284c7;
+    }
+    .cref-hour-pill input[type="checkbox"] {
+      cursor: pointer;
+      accent-color: #0284c7;
+      margin: 0;
+    }
+    .radar-cases-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 160px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .radar-cases-list::-webkit-scrollbar {
+      width: 4px;
+    }
+    .radar-cases-list::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 2px;
+    }
+    .radar-case-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #0284c7;
+      border-radius: 6px;
+      padding: 7px 10px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .radar-case-hdr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 3px;
+    }
+    .radar-case-date {
+      font-weight: 700;
+      font-size: 12px;
+      color: #0f172a;
+    }
+    .radar-case-count {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #0284c7;
+      background: #e0f2fe;
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+    .radar-case-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .radar-fhr-tag {
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+    .radar-empty-hint {
+      padding: 12px;
+      text-align: center;
+      font-size: 11.5px;
+      color: #94a3b8;
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+      border-radius: 6px;
+    }
+
+    /* Wide Screen Responsive Layout (Zero-scroll App Shell: Header fixed, columns fill window height perfectly) */
+    @media (min-width: 1024px) {
+      html, body {
+        height: 100vh;
+        overflow: hidden;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        padding-bottom: 0;
+      }
+      .header {
+        flex-shrink: 0;
+      }
+      .container {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        max-width: 100%;
+        padding: 12px 20px 14px 20px;
+        margin: 0;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+      .layout-grid {
+        display: grid;
+        grid-template-columns: minmax(520px, 1.08fr) minmax(480px, 1fr);
+        gap: 16px;
+        height: 100%;
+        min-height: 0;
+        align-items: stretch;
+      }
+      .layout-left {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        height: 100%;
+        min-height: 0;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .layout-left::-webkit-scrollbar {
+        width: 6px;
+      }
+      .layout-left::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
+      .layout-right {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+      }
+      .terminal-card {
+        flex: 1;
+        height: 100%;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 0;
+        box-sizing: border-box;
+      }
+      .terminal-card .terminal-box {
+        flex: 1;
+        min-height: 0;
+        height: 100%;
+        overflow-y: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <h1>⚡ NOAA GSL MATS Verification & Reporting Studio</h1>
+    <p>Native Desktop Application · Automated MATS Surface (inc. 3-h), Upper Air (RAOBs/AMDAR), Radar Composite Reflectivity (15/25/35 dBZ), Cloud Ceiling & Visibility Verification with Synchronized PowerPoint & HTML Presentation Generation</p>
+  </header>
+
+  <main class="container">
+    <div class="layout-grid">
+      <!-- Left Column: Configurations & Action Controls -->
+      <div class="layout-left">
+        <!-- 1. Core Configuration -->
+        <div class="card">
+          <div class="card-title">
+            <span>🎯 Core Configuration (Required)</span>
+            <span class="badge warn" id="modelBadge">⚠️ No Experiments Specified</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="reportTitle">1. Report Title:</label>
+            <input type="text" id="reportTitle" class="form-control" value="" placeholder="e.g. RRFSv2 Model Verification & Performance Evaluation (optional)">
+            <div class="form-hint">Template: RRFSv2 Model Verification &amp; Performance Evaluation (leave blank to use default template)</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="outputDir">2. Output Directory:</label>
+            <div class="input-row">
+              <input type="text" id="outputDir" class="form-control" value="__DEFAULT_OUTPUT_DIR__" placeholder="Directory path to save charts, PPT, and HTML report">
+              <button type="button" class="btn btn-secondary" onclick="browseFolder()">📂 Browse...</button>
+            </div>
+            <div class="form-hint">Automatically defaults to your Desktop. High-resolution charts, PowerPoint presentation, and HTML report will be saved here.</div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label class="form-label" style="margin-bottom:0;">3. Experiments (One experiment per line):</label>
+              <div class="btn-group">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="insertExampleModels()">📋 Insert Example</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="clearModels()">🧹 Clear</button>
+              </div>
+            </div>
+            <textarea id="modelsText" class="form-control" rows="5" placeholder="Enter or paste experiments here, one per line...&#10;Supported formats:&#10;1. Experiment_ID - machine:path (e.g. RRFSv2_conus_3km_exp1 - gaeac6:/gpfs/f6/wrfruc/scratch/username/retros/exp1)&#10;2. Experiment_ID (e.g. RRFSv2_conus_3km_baseline)"></textarea>
+            <div class="form-hint">Format: 'Experiment_ID - machine:path' or simply 'Experiment_ID'. Machine supports gaeac5, gaeac6, gaeac7, gaea, hera, etc. Short aliases (e.g., generictquv, halfTerr, retv3, retv4) are extracted automatically, and remote synoptic radar plots are fetched via HPC as needed.</div>
+          </div>
+        </div>
+
+        <!-- 2. Advanced Options -->
+        <div class="card">
+          <div class="card-title">
+            <span>⚙️ Verification Options</span>
+          </div>
+          <div class="row">
+            <div class="col">
+              <label class="form-label">Surface Verification Period:</label>
+              <div class="date-range-row">
+                <div class="dt-field-group" onclick="openDateTimePicker('sfcStart', this)">
+                  <span class="dt-badge">From</span>
+                  <input type="text" id="sfcStart" class="dt-input" value="05/06/2024 10:00" readonly>
+                  <span class="dt-calendar-btn">📅</span>
+                </div>
+                <span class="date-separator">→</span>
+                <div class="dt-field-group" onclick="openDateTimePicker('sfcEnd', this)">
+                  <span class="dt-badge">To</span>
+                  <input type="text" id="sfcEnd" class="dt-input" value="05/13/2024 00:00" readonly>
+                  <span class="dt-calendar-btn">📅</span>
+                </div>
+              </div>
+            </div>
+            <div class="col">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label class="form-label" style="margin-bottom:0;">Upper Air Verification Period:</label>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="syncUpperAirDates()" title="Copy start and end dates from Surface">📋 Sync from Surface</button>
+              </div>
+              <div class="date-range-row" style="margin-top: 4px;">
+                <div class="dt-field-group" onclick="openDateTimePicker('uaStart', this)">
+                  <span class="dt-badge">From</span>
+                  <input type="text" id="uaStart" class="dt-input" value="05/06/2024 00:00" readonly>
+                  <span class="dt-calendar-btn">📅</span>
+                </div>
+                <span class="date-separator">→</span>
+                <div class="dt-field-group" onclick="openDateTimePicker('uaEnd', this)">
+                  <span class="dt-badge">To</span>
+                  <input type="text" id="uaEnd" class="dt-input" value="05/13/2024 12:00" readonly>
+                  <span class="dt-calendar-btn">📅</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="margin-top: 10px;">
+            <div class="col">
+              <label class="form-label" for="reportName">Report File Name:</label>
+              <input type="text" id="reportName" class="form-control" value="RRFSv2_Verification_Report" placeholder="e.g. RRFSv2_Verification_Report">
+              <div class="form-hint">Base name for generated PowerPoint (.pptx) and HTML (.html) presentations (no extension needed).</div>
+            </div>
+            <div class="col" style="display:flex; align-items:center; gap: 16px; padding-top: 22px;">
+              <label style="font-size:13px; cursor:pointer;"><input type="checkbox" id="skipFetch"> Generate PPT only (Skip fetch)</label>
+            </div>
+          </div>
+          <div class="row" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+            <div class="col">
+              <label class="form-label" style="margin-bottom: 6px;">Evaluation Regions:</label>
+              <div style="display:flex; align-items:center; gap: 20px; padding-top: 2px;">
+                <label style="font-size:13px; font-weight: 500; cursor:pointer;" title="Full HRRR domain / Continental US"><input type="checkbox" id="regAll" checked disabled> 🇺🇸 Full Domain (Default)</label>
+                <label style="font-size:13px; font-weight: 500; cursor:pointer;" title="Eastern HRRR domain / East of 109W"><input type="checkbox" id="regEast"> 🌊 Eastern Region (East CONUS)</label>
+                <label style="font-size:13px; font-weight: 500; cursor:pointer;" title="Western HRRR domain / West of 109W / Complex Terrain"><input type="checkbox" id="regWest"> 🏔️ Western Region (Complex Terrain)</label>
+              </div>
+              <div class="form-hint" style="margin-top: 4px;">Full Domain is evaluated as baseline. Check Eastern and/or Western to append dedicated regional evaluation chapters in PowerPoint and tabbed views in HTML.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Dedicated Composite Reflectivity Cases Block -->
+        <div class="card" id="radarCard">
+          <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>📡 Composite Reflectivity Cases (Radar Verification)</span>
+            <label style="font-size:12.5px; font-weight:600; cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:6px;">
+              <input type="checkbox" id="includeCref" checked onchange="toggleRadarBlock()"> Enable Radar Comparisons
+            </label>
+          </div>
+          
+          <div id="radarBlockBody">
+            <div class="radar-creator-box">
+              <div style="font-size:12px; font-weight:700; color:#1e293b; margin-bottom:6px;">
+                ➕ Add Verification Case (日历选择起报日期与时次，自动匹配预报时效):
+              </div>
+              
+              <div class="row" style="align-items:flex-end; gap:10px;">
+                <div class="col" style="flex:1.2;">
+                  <label class="form-label" style="margin-bottom:4px; font-size:11.5px;">Initialization Date & Cycle (起报时次 UTC):</label>
+                  <div class="dt-field-group" onclick="openDateTimePicker('crefCaseDateTime', this)">
+                    <span class="dt-badge">Cycle</span>
+                    <input type="text" id="crefCaseDateTime" class="dt-input" value="05/07/2024 00:00" readonly>
+                    <span class="dt-calendar-btn">📅</span>
+                  </div>
+                </div>
+                
+                <div class="col" style="flex:0.8;">
+                  <label class="form-label" style="margin-bottom:4px; font-size:11.5px;">Quick Cycle (UTC):</label>
+                  <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 7px; font-size:11px;" onclick="setQuickCrefCycle('00')">00Z</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 7px; font-size:11px;" onclick="setQuickCrefCycle('03')">03Z</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 7px; font-size:11px;" onclick="setQuickCrefCycle('12')">12Z</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 7px; font-size:11px;" onclick="setQuickCrefCycle('18')">18Z</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 7px; font-size:11px;" onclick="setQuickCrefCycle('19')">19Z</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Matched Forecast Hours Multi-select section -->
+              <div style="margin-top:10px; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span style="font-size:12px; font-weight:700; color:#0f172a;">
+                    ⏱️ Select Forecast Lead Hours (预报时效多选):
+                  </span>
+                  <span id="crefCycleBadge" class="badge" style="background:#e0f2fe; color:#0369a1; font-size:11px;">
+                    Max: 72-h Synoptic (00Z)
+                  </span>
+                </div>
+
+                <div id="crefHoursPills" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;"></div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; gap:5px;">
+                    <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px; padding:2px 8px;" onclick="setCrefHoursPreset('all')">Select All</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px; padding:2px 8px;" onclick="setCrefHoursPreset('standard')">Standard</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px; padding:2px 8px;" onclick="setCrefHoursPreset('none')">Clear</button>
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm" onclick="addRadarCaseToList()" style="font-weight:600;">
+                    ➕ Add Case to List
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Active Verification List -->
+            <div style="margin-top:10px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <label class="form-label" style="margin-bottom:0; font-size:12px; font-weight:700;">
+                  📋 Active Radar Cases for Verification (已添加验证列表):
+                </label>
+                <span id="radarCasesSummary" style="font-size:11.5px; color:#64748b; font-weight:600;">
+                  0 Cases · 0 Slides
+                </span>
+              </div>
+              <div id="radarCasesList" class="radar-cases-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Actions Toolbar -->
+        <div class="actions-bar">
+          <div class="status-bar">
+            <span class="pulse" id="pulseIndicator"></span>
+            <span id="statusText" style="font-weight: 600; font-size: 13.5px; color: #1e293b;">Ready</span>
+          </div>
+          <div class="btn-group">
+            <button type="button" class="btn btn-secondary" onclick="openOutputDirectory()">📂 Open Folder</button>
+            <button type="button" class="btn btn-secondary" onclick="openPPTFile()">📊 Open PPT</button>
+            <button type="button" class="btn btn-secondary" onclick="openHTMLFile()">🌐 Open HTML</button>
+            <button type="button" class="btn btn-primary" id="btnStart" onclick="startRun()">🚀 Start Automated Generation</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Dedicated Live Log Console -->
+      <div class="layout-right">
+        <div class="card terminal-card">
+          <div class="card-title" style="margin-bottom: 8px;">
+            <span>💻 Live Log Console</span>
+            <button class="btn btn-secondary btn-sm" onclick="clearLogs()">🧹 Clear Log</button>
+          </div>
+          <div class="terminal-box" id="terminal">Ready. Click 'Start Automated Generation' to begin...</div>
+        </div>
+      </div>
+  </main>
+
+  <!-- Unified Popover DateTime Picker Modal -->
+  <div id="dtPickerModal" class="dt-picker-modal" style="display: none;">
+    <div class="dt-header">
+      <button type="button" class="dt-nav-btn" onclick="dtPrevMonth()">❮</button>
+      <div id="dtMonthYear" class="dt-month-year">May 2024</div>
+      <button type="button" class="dt-nav-btn" onclick="dtNextMonth()">❯</button>
+    </div>
+    <div class="dt-weekdays">
+      <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+    </div>
+    <div id="dtDaysGrid" class="dt-days-grid"></div>
+
+    <div class="dt-time-section">
+      <div class="dt-time-title">
+        <span>⏰ Time (UTC)</span>
+        <span style="font-weight: 500; font-size: 11px; color: #64748b;">Synoptic UTC</span>
+      </div>
+      <div class="dt-time-controls">
+        <select id="dtHourSelect" class="dt-time-select"></select>
+        <span style="font-weight: bold; color: #64748b;">:</span>
+        <select id="dtMinuteSelect" class="dt-time-select">
+          <option value="00">00</option>
+          <option value="15">15</option>
+          <option value="30">30</option>
+          <option value="45">45</option>
+        </select>
+        <span style="font-size: 11.5px; font-weight: 700; color: #475569;">UTC</span>
+      </div>
+      <div class="dt-quick-chips">
+        <div class="dt-chip" onclick="dtSetQuickTime('00:00')">00Z</div>
+        <div class="dt-chip" onclick="dtSetQuickTime('06:00')">06Z</div>
+        <div class="dt-chip" onclick="dtSetQuickTime('12:00')">12Z</div>
+        <div class="dt-chip" onclick="dtSetQuickTime('18:00')">18Z</div>
+      </div>
+    </div>
+
+    <div class="dt-footer">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="closeDateTimePicker()">Cancel</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="applyDateTimePicker()">✓ Apply</button>
+    </div>
+  </div>
+
+  <script>
+    const EXAMPLE_MODELS = `RRFSv2_conus_3km_exp1 - gaeac6:/gpfs/f6/wrfruc/scratch/username/retros/exp1\nRRFSv2_conus_3km_baseline`;
+
+    function insertExampleModels() {
+      document.getElementById('modelsText').value = EXAMPLE_MODELS;
+      updateModelBadge();
+    }
+
+    function clearModels() {
+      document.getElementById('modelsText').value = '';
+      updateModelBadge();
+    }
+
+    function updateModelBadge() {
+      const text = document.getElementById('modelsText').value.trim();
+      const count = text ? text.split('\\n').filter(l => l.trim().length > 0).length : 0;
+      const badge = document.getElementById('modelBadge');
+      if (count === 0) {
+        badge.innerText = '⚠️ No Experiments Specified';
+        badge.className = 'badge warn';
+      } else {
+        badge.innerText = `${count} Experiments Identified`;
+        badge.className = 'badge';
+      }
+    }
+
+    document.getElementById('modelsText').addEventListener('input', updateModelBadge);
+
+    // Global keyboard shortcuts (Cmd+Q, Cmd+W)
+    window.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'q' || e.key === 'Q' || e.key === 'w' || e.key === 'W')) {
+        if (window.quitApp) {
+          e.preventDefault();
+          window.quitApp();
+        }
+      }
+    });
+
+    async function browseFolder() {
+      if (window.selectFolderDialog) {
+        const path = await window.selectFolderDialog();
+        if (path) {
+          document.getElementById('outputDir').value = path;
+        }
+      }
+    }
+
+    async function openOutputDirectory() {
+      const dir = document.getElementById('outputDir').value.trim();
+      if (window.openPathInOS) {
+        window.openPathInOS(dir);
+      }
+    }
+
+    function getCleanReportBaseName() {
+      const el = document.getElementById('reportName') || document.getElementById('pptxName');
+      let name = el ? el.value.trim() : '';
+      if (!name) name = 'RRFSv2_Verification_Report';
+      // Strip any extension (.pptx, .html, .ppt) if entered by user
+      name = name.replace(/\.(pptx|html|ppt)$/i, '');
+      return name;
+    }
+
+    async function openPPTFile() {
+      const dir = document.getElementById('outputDir').value.trim();
+      const baseName = getCleanReportBaseName();
+      const pptxPath = dir + '/' + baseName + '.pptx';
+      if (window.openPathInOS) {
+        window.openPathInOS(pptxPath);
+      }
+    }
+
+    async function openHTMLFile() {
+      const dir = document.getElementById('outputDir').value.trim();
+      const baseName = getCleanReportBaseName();
+      const htmlPath = dir + '/' + baseName + '.html';
+      if (window.openPathInOS) {
+        window.openPathInOS(htmlPath);
+      }
+    }
+
+    // Global state for unified DateTime Picker Popover
+    let activeDtInputId = null;
+    let pickerYear = 2024;
+    let pickerMonth = 4; // 0-indexed (May = 4)
+    let pickerDay = 6;
+    let pickerHour = '10';
+    let pickerMinute = '00';
+
+    const MONTH_NAMES = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    function initHourSelect() {
+      const hSel = document.getElementById('dtHourSelect');
+      if (!hSel || hSel.children.length > 0) return;
+      for (let h = 0; h < 24; h++) {
+        const hh = String(h).padStart(2, '0');
+        const opt = document.createElement('option');
+        opt.value = hh;
+        opt.textContent = hh;
+        hSel.appendChild(opt);
+      }
+    }
+
+    function openDateTimePicker(inputId, triggerEl) {
+      activeDtInputId = inputId;
+      initHourSelect();
+
+      const input = document.getElementById(inputId);
+      const val = input.value.trim();
+      // Format: "MM/DD/YYYY HH:MM"
+      if (val) {
+        const [dPart, tPart] = val.split(' ');
+        if (dPart) {
+          const [mm, dd, yyyy] = dPart.split('/');
+          if (yyyy && mm && dd) {
+            pickerYear = parseInt(yyyy, 10);
+            pickerMonth = parseInt(mm, 10) - 1;
+            pickerDay = parseInt(dd, 10);
+          }
+        }
+        if (tPart) {
+          const [hh, min] = tPart.split(':');
+          pickerHour = (hh || '00').padStart(2, '0');
+          pickerMinute = min || '00';
+        }
+      }
+
+      document.getElementById('dtHourSelect').value = pickerHour;
+      document.getElementById('dtMinuteSelect').value = pickerMinute;
+      updateQuickChipHighlight();
+      renderDaysGrid();
+
+      const modal = document.getElementById('dtPickerModal');
+      modal.style.visibility = 'hidden';
+      modal.style.display = 'block';
+
+      const rect = triggerEl.getBoundingClientRect();
+      const modalHeight = modal.offsetHeight || 315;
+      const modalWidth = modal.offsetWidth || 290;
+
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+
+      let topPos;
+      if (spaceBelow >= modalHeight + 12) {
+        // Fits comfortably below
+        topPos = rect.bottom + 6;
+      } else if (spaceAbove >= modalHeight + 12) {
+        // Fits comfortably above (flip upwards)
+        topPos = rect.top - modalHeight - 6;
+      } else {
+        // Choose side with more space and clamp strictly inside viewport
+        if (spaceBelow >= spaceAbove) {
+          topPos = Math.min(rect.bottom + 6, window.innerHeight - modalHeight - 10);
+        } else {
+          topPos = Math.max(10, rect.top - modalHeight - 6);
+        }
+        topPos = Math.max(10, topPos);
+      }
+
+      let leftPos = rect.left;
+      if (leftPos + modalWidth > window.innerWidth - 12) {
+        leftPos = Math.max(10, window.innerWidth - modalWidth - 12);
+      }
+      leftPos = Math.max(10, leftPos);
+
+      modal.style.top = topPos + 'px';
+      modal.style.left = leftPos + 'px';
+      modal.style.visibility = 'visible';
+    }
+
+    function closeDateTimePicker() {
+      document.getElementById('dtPickerModal').style.display = 'none';
+      activeDtInputId = null;
+    }
+
+    function dtPrevMonth() {
+      pickerMonth--;
+      if (pickerMonth < 0) {
+        pickerMonth = 11;
+        pickerYear--;
+      }
+      renderDaysGrid();
+    }
+
+    function dtNextMonth() {
+      pickerMonth++;
+      if (pickerMonth > 11) {
+        pickerMonth = 0;
+        pickerYear++;
+      }
+      renderDaysGrid();
+    }
+
+    function dtSetQuickTime(timeStr) {
+      const [hh, min] = timeStr.split(':');
+      pickerHour = hh;
+      pickerMinute = min;
+      document.getElementById('dtHourSelect').value = hh;
+      document.getElementById('dtMinuteSelect').value = min;
+      updateQuickChipHighlight();
+    }
+
+    function updateQuickChipHighlight() {
+      const cur = `${pickerHour}:${pickerMinute}`;
+      document.querySelectorAll('.dt-chip').forEach(chip => {
+        const text = chip.textContent.trim();
+        const chipTime = text.replace('Z', ':00');
+        if (chipTime === cur) {
+          chip.classList.add('active');
+        } else {
+          chip.classList.remove('active');
+        }
+      });
+    }
+
+    document.getElementById('dtHourSelect').addEventListener('change', (e) => {
+      pickerHour = e.target.value;
+      updateQuickChipHighlight();
+    });
+    document.getElementById('dtMinuteSelect').addEventListener('change', (e) => {
+      pickerMinute = e.target.value;
+      updateQuickChipHighlight();
+    });
+
+    function renderDaysGrid() {
+      document.getElementById('dtMonthYear').textContent = `${MONTH_NAMES[pickerMonth]} ${pickerYear}`;
+      const grid = document.getElementById('dtDaysGrid');
+      grid.innerHTML = '';
+
+      const firstDayIndex = new Date(pickerYear, pickerMonth, 1).getDay();
+      const daysInMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
+      const prevMonthDays = new Date(pickerYear, pickerMonth, 0).getDate();
+
+      // Leading padding days from previous month
+      for (let i = firstDayIndex - 1; i >= 0; i--) {
+        const cell = document.createElement('div');
+        cell.className = 'dt-day-cell empty';
+        cell.textContent = prevMonthDays - i;
+        grid.appendChild(cell);
+      }
+
+      const today = new Date();
+      // Current month days
+      for (let day = 1; day <= daysInMonth; day++) {
+        const cell = document.createElement('div');
+        cell.className = 'dt-day-cell';
+        cell.textContent = day;
+
+        if (day === pickerDay) {
+          cell.classList.add('selected');
+        }
+        if (today.getFullYear() === pickerYear && today.getMonth() === pickerMonth && today.getDate() === day) {
+          cell.classList.add('today');
+        }
+
+        cell.onclick = (e) => {
+          e.stopPropagation();
+          pickerDay = day;
+          document.querySelectorAll('.dt-day-cell').forEach(c => c.classList.remove('selected'));
+          cell.classList.add('selected');
+        };
+        cell.ondblclick = (e) => {
+          e.stopPropagation();
+          pickerDay = day;
+          applyDateTimePicker();
+        };
+
+        grid.appendChild(cell);
+      }
+    }
+
+    function applyDateTimePicker() {
+      if (!activeDtInputId) return;
+      const mm = String(pickerMonth + 1).padStart(2, '0');
+      const dd = String(pickerDay).padStart(2, '0');
+      const yyyy = pickerYear;
+      const hh = document.getElementById('dtHourSelect').value;
+      const min = document.getElementById('dtMinuteSelect').value;
+
+      const formatted = `${mm}/${dd}/${yyyy} ${hh}:${min}`;
+      const targetId = activeDtInputId;
+      document.getElementById(targetId).value = formatted;
+      closeDateTimePicker();
+
+      if (targetId === 'crefCaseDateTime') {
+        onCrefDateTimeChanged();
+      }
+    }
+
+    // Close when clicking outside
+    document.addEventListener('mousedown', (e) => {
+      const modal = document.getElementById('dtPickerModal');
+      if (!modal || modal.style.display === 'none') return;
+      if (!modal.contains(e.target) && !e.target.closest('.dt-field-group')) {
+        closeDateTimePicker();
+      }
+    });
+
+    function syncUpperAirDates() {
+      document.getElementById('uaStart').value = document.getElementById('sfcStart').value;
+      document.getElementById('uaEnd').value = document.getElementById('sfcEnd').value;
+    }
+
+    // ==========================================
+    // Composite Reflectivity Dynamic Case Logic
+    // ==========================================
+    let activeRadarCases = [];
+
+    function toggleRadarBlock() {
+      const enabled = document.getElementById('includeCref').checked;
+      const body = document.getElementById('radarBlockBody');
+      if (body) {
+        body.style.opacity = enabled ? '1' : '0.45';
+        body.style.pointerEvents = enabled ? 'auto' : 'none';
+      }
+    }
+
+    function setQuickCrefCycle(hourStr) {
+      const el = document.getElementById('crefCaseDateTime');
+      let val = el.value.trim();
+      if (!val) val = '05/07/2024 00:00';
+      const parts = val.split(' ');
+      el.value = `${parts[0]} ${hourStr}:00`;
+      onCrefDateTimeChanged();
+    }
+
+    function onCrefDateTimeChanged() {
+      const el = document.getElementById('crefCaseDateTime');
+      if (!el) return;
+      const val = el.value.trim();
+      let hour = '00';
+      if (val.includes(' ')) {
+        const tPart = val.split(' ')[1];
+        hour = (tPart.split(':')[0] || '00').padStart(2, '0');
+      }
+
+      const badge = document.getElementById('crefCycleBadge');
+      const container = document.getElementById('crefHoursPills');
+      if (!container || !badge) return;
+      container.innerHTML = '';
+
+      let availableHours = [];
+
+      if (hour === '00' || hour === '12') {
+        badge.textContent = `Max: 72-h Synoptic (${hour}Z)`;
+        badge.style.background = '#e0f2fe';
+        badge.style.color = '#0369a1';
+        availableHours = [0, 1, 2, 3, 6, 12, 24, 36, 48, 60, 72];
+      } else if (['03', '06', '09', '15', '18', '21'].includes(hour)) {
+        badge.textContent = `Max: 12-h Sub-Synoptic (${hour}Z)`;
+        badge.style.background = '#fef3c7';
+        badge.style.color = '#92400e';
+        availableHours = [0, 1, 2, 3, 4, 5, 6, 8, 10, 12];
+      } else {
+        badge.textContent = `Max: 3-h Rapid-Refresh (${hour}Z)`;
+        badge.style.background = '#fee2e2';
+        badge.style.color = '#991b1b';
+        availableHours = [0, 1, 2, 3];
+      }
+
+      availableHours.forEach(h => {
+        const pill = document.createElement('label');
+        pill.className = 'cref-hour-pill';
+        pill.innerHTML = `
+          <input type="checkbox" class="cref-hour-cb" value="${h}" onchange="updateHourPillStyle(this)">
+          <span>f${String(h).padStart(2, '0')} (${h}h)</span>
+        `;
+        container.appendChild(pill);
+      });
+    }
+
+    function updateHourPillStyle(cb) {
+      const pill = cb.closest('.cref-hour-pill');
+      if (pill) {
+        if (cb.checked) {
+          pill.classList.add('active');
+        } else {
+          pill.classList.remove('active');
+        }
+      }
+    }
+
+    function setCrefHoursPreset(preset) {
+      const cbs = document.querySelectorAll('.cref-hour-cb');
+      const el = document.getElementById('crefCaseDateTime');
+      const val = el ? el.value.trim() : '';
+      let hour = '00';
+      if (val.includes(' ')) {
+        const tPart = val.split(' ')[1];
+        hour = (tPart.split(':')[0] || '00').padStart(2, '0');
+      }
+
+      let standardList = [0, 12, 24, 48, 72];
+      if (['03', '06', '09', '15', '18', '21'].includes(hour)) {
+        standardList = [0, 3, 6, 12];
+      } else if (!['00', '12'].includes(hour)) {
+        standardList = [1, 2, 3];
+      }
+
+      cbs.forEach(cb => {
+        const v = parseInt(cb.value, 10);
+        if (preset === 'all') {
+          cb.checked = true;
+        } else if (preset === 'none') {
+          cb.checked = false;
+        } else if (preset === 'standard') {
+          cb.checked = standardList.includes(v);
+        }
+        updateHourPillStyle(cb);
+      });
+    }
+
+    function addRadarCaseToList() {
+      const el = document.getElementById('crefCaseDateTime');
+      const val = el ? el.value.trim() : '';
+      if (!val || !val.includes(' ')) {
+        alert('Please pick a valid initialization date and time for the radar case.');
+        return;
+      }
+      const [dPart, tPart] = val.split(' ');
+      const [mm, dd, yyyy] = dPart.split('/');
+      if (!yyyy || !mm || !dd) {
+        alert('Invalid date format. Use the calendar picker.');
+        return;
+      }
+      const hour = (tPart.split(':')[0] || '00').padStart(2, '0');
+      const cdate = `${yyyy}${mm}${dd}`;
+      const displayDate = `${yyyy}-${mm}-${dd} ${hour}Z`;
+
+      const checkedBoxes = Array.from(document.querySelectorAll('.cref-hour-cb:checked'));
+      if (checkedBoxes.length === 0) {
+        alert('Please select at least one forecast lead hour for this case.');
+        return;
+      }
+
+      const fhrs = checkedBoxes.map(cb => parseInt(cb.value, 10)).sort((a, b) => a - b);
+
+      const existingIdx = activeRadarCases.findIndex(c => c.date === cdate && c.cycle === hour);
+      if (existingIdx >= 0) {
+        activeRadarCases[existingIdx].fhrs = fhrs;
+        activeRadarCases[existingIdx].displayDate = displayDate;
+      } else {
+        activeRadarCases.push({
+          date: cdate,
+          cycle: hour,
+          displayDate: displayDate,
+          fhrs: fhrs
+        });
+      }
+
+      renderRadarCasesList();
+    }
+
+    function removeRadarCase(idx) {
+      activeRadarCases.splice(idx, 1);
+      renderRadarCasesList();
+    }
+
+    function renderRadarCasesList() {
+      const listContainer = document.getElementById('radarCasesList');
+      const summaryEl = document.getElementById('radarCasesSummary');
+      if (!listContainer || !summaryEl) return;
+      listContainer.innerHTML = '';
+
+      if (activeRadarCases.length === 0) {
+        summaryEl.textContent = '0 Cases · 0 Slides';
+        listContainer.innerHTML = '<div class="radar-empty-hint">No radar cases in list. Pick date/time and hours above, then click "➕ Add Case to List".</div>';
+        return;
+      }
+
+      let totalSlides = 0;
+      activeRadarCases.forEach((c, idx) => {
+        totalSlides += c.fhrs.length;
+        const item = document.createElement('div');
+        item.className = 'radar-case-item';
+
+        const fhrTags = c.fhrs.map(f => `<span class="radar-fhr-tag">f${String(f).padStart(2, '0')}</span>`).join(' ');
+
+        item.innerHTML = `
+          <div class="radar-case-left">
+            <div class="radar-case-hdr">
+              <span class="radar-case-date">📅 ${c.displayDate || (c.date + ' ' + c.cycle + 'Z')}</span>
+              <span class="radar-case-count">${c.fhrs.length} slides</span>
+            </div>
+            <div class="radar-case-tags">${fhrTags}</div>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="removeRadarCase(${idx})" title="Remove case from verification list">🗑 Remove</button>
+        `;
+        listContainer.appendChild(item);
+      });
+
+      summaryEl.textContent = `${activeRadarCases.length} Case${activeRadarCases.length > 1 ? 's' : ''} · ${totalSlides} Slides`;
+    }
+
+    // Initialize Radar UI & Badges on startup
+    setTimeout(() => {
+      onCrefDateTimeChanged();
+      renderRadarCasesList();
+      updateModelBadge();
+    }, 50);
+
+    async function startRun() {
+      const rawTitle = document.getElementById('reportTitle').value.trim();
+      const title = rawTitle || 'RRFSv2 Model Verification & Performance Evaluation';
+      const outputDir = document.getElementById('outputDir').value.trim();
+      const modelsText = document.getElementById('modelsText').value.trim();
+      const sfcStart = document.getElementById('sfcStart').value.trim();
+      const sfcEnd = document.getElementById('sfcEnd').value.trim();
+      const uaStart = document.getElementById('uaStart').value.trim();
+      const uaEnd = document.getElementById('uaEnd').value.trim();
+
+      const sfcDates = `${sfcStart} - ${sfcEnd}`;
+      const uaDates = `${uaStart} - ${uaEnd}`;
+      const baseName = getCleanReportBaseName();
+      const skipFetch = document.getElementById('skipFetch').checked;
+      const includeCref = document.getElementById('includeCref').checked;
+
+      const regions = ['all'];
+      if (document.getElementById('regEast').checked) regions.push('east');
+      if (document.getElementById('regWest').checked) regions.push('west');
+
+      if (!outputDir) { alert('Please specify an Output Directory!'); return; }
+      if (!modelsText) { alert('Please provide at least one Experiment!'); return; }
+      if (!sfcStart || !sfcEnd) { alert('Please select a valid Surface Verification Period (From & To)!'); return; }
+      if (!uaStart || !uaEnd) { alert('Please select a valid Upper Air Verification Period (From & To)!'); return; }
+
+      const btn = document.getElementById('btnStart');
+      btn.disabled = true;
+      btn.innerText = '⏳ Running Pipeline...';
+      document.getElementById('pulseIndicator').style.background = '#eab308';
+      document.getElementById('statusText').innerText = 'Executing automated verification pipeline...';
+
+      const payload = JSON.stringify({
+        title, output_dir: outputDir, models_text: modelsText,
+        sfc_dates: sfcDates, ua_dates: uaDates,
+        report_name: baseName, pptx_name: baseName,
+        skip_fetch: skipFetch,
+        include_cref: includeCref,
+        radar_cases: activeRadarCases,
+        regions: regions
+      });
+
+      if (window.runPipelineNative) {
+        window.runPipelineNative(payload);
+      }
+    }
+
+    // Called from Go backend
+    function appendLog(line) {
+      const term = document.getElementById('terminal');
+      if (term.innerText.startsWith('Ready.')) {
+        term.innerText = '';
+      }
+      term.innerText += line;
+      term.scrollTop = term.scrollHeight;
+    }
+
+    function onPipelineFinished(success, message) {
+      const btn = document.getElementById('btnStart');
+      btn.disabled = false;
+      btn.innerText = '🚀 Start Automated Generation';
+      if (success) {
+        document.getElementById('pulseIndicator').style.background = '#16a34a';
+        document.getElementById('statusText').innerText = '✅ Generation Complete!';
+      } else {
+        document.getElementById('pulseIndicator').style.background = '#dc2626';
+        document.getElementById('statusText').innerText = '❌ Execution Error. Check log console.';
+      }
+    }
+
+    function clearLogs() {
+      document.getElementById('terminal').innerText = '';
+    }
+  </script>
+</body>
+</html>

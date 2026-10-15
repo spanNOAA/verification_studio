@@ -1,0 +1,30 @@
+# NOAA GSL MATS Automated Verification & Presentation Generator Configuration
+title: "RRFSv2 Model Verification & Performance Evaluation"
+
+# Evaluated models list (id is the actual name on MATS, name is display alias, color is unique hex/rgb)
+models:
+  - id: "RRFSv2_conus_3km_ret_generictquv"
+    name: "generictquv"
+    color: "rgb(255, 0, 0)"        # Red
+  - id: "RRFSv2_conus_3km_ret_halfTerr"
+    name: "halfTerr"
+    color: "rgb(0, 0, 255)"        # Blue
+  - id: "RRFSv2_conus_3km_ret_RRFSv2X_retv3"
+    name: "retv3"
+    color: "rgb(255, 165, 0)"      # Orange
+  - id: "RRFSv2_conus_3km_ret_v2x_retv4"
+    name: "retv4"
+    color: "rgb(128, 128, 128)"    # Grey
+
+# Verification date ranges (aligned with MATS curve-dates)
+dates:
+  surface: "05/06/2024 10:00 - 05/13/2024 00:00"
+  upperair: "05/06/2024 00:00 - 05/13/2024 12:00"
+
+# Output paths
+output_dir: "./output"
+output_pptx: "./output/RRFSv2_Verification_Report.pptx"
+
+# Optional: Radar reflectivity and benchmark directories
+cref_dir: "./output/cref"
+extracted_ref_dir: "./output/extracted_ref"
