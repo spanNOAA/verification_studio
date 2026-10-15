@@ -485,18 +485,18 @@ class HPCDaemon:
 
         if op == "list":
             # List remote directory entries (non-recursive, single layer)
-            cmd = f'if [ -d -- {quoted} ]; then /bin/ls -1 -p -- {quoted}; exit 0; else echo "NOT_A_DIRECTORY"; exit 1; fi'
+            cmd = f'if [ -d {quoted} ]; then /bin/ls -1 -p -- {quoted}; exit 0; else echo "NOT_A_DIRECTORY"; exit 1; fi'
             return self.exec_raw_remote(cmd, idle_timeout=30)
 
         elif op == "stat":
             # Query remote file size, mtime, and file type attributes
-            cmd = f'if [ -e -- {quoted} ]; then stat -c "%s %Y %f" -- {quoted} 2>/dev/null || stat -f "%z %m %p" -- {quoted} 2>/dev/null; exit 0; else echo "NOT_FOUND"; exit 1; fi'
+            cmd = f'if [ -e {quoted} ]; then stat -c "%s %Y %f" -- {quoted} 2>/dev/null || stat -f "%z %m %p" -- {quoted} 2>/dev/null; exit 0; else echo "NOT_FOUND"; exit 1; fi'
             return self.exec_raw_remote(cmd, idle_timeout=15)
 
         elif op == "download":
             # P1-7: Check remote file exists and enforce 50MB maximum file size before Base64 retrieval
             cmd = (
-                f'if [ -f -- {quoted} ]; then '
+                f'if [ -f {quoted} ]; then '
                 f'sz=$(stat -c "%s" -- {quoted} 2>/dev/null || stat -f "%z" -- {quoted} 2>/dev/null || echo 0); '
                 f'if [ "$sz" -le {MAX_DOWNLOAD_BYTES} ]; then '
                 f'(base64 -w 0 -- {quoted} 2>/dev/null || base64 -b 0 -- {quoted} 2>/dev/null || base64 -- {quoted} | tr -d "\\r\\n"); exit 0; '
