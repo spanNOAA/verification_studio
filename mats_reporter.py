@@ -16,6 +16,9 @@ import subprocess
 import sys
 import yaml
 import json
+import shlex
+import tempfile
+from PIL import Image
 from playwright.async_api import async_playwright
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -26,6 +29,88 @@ if hasattr(sys.stderr, 'reconfigure'):
 # Prevent PYTHONHOME/PYTHONPATH from poisoning any child Python processes (e.g. hpc-run)
 os.environ.pop("PYTHONHOME", None)
 os.environ.pop("PYTHONPATH", None)
+
+VALID_HPC_CLUSTERS = {"gaea", "gaea-c5", "gaea-c6", "gaea-c7", "hera", "ursa", "orion", "hercules"}
+
+def reject_pty_control_chars(s: str) -> str:
+    """
+    Guards against PTY line discipline injection attacks by rejecting
+    ASCII C0 control characters (0x00-0x1F, including newline/carriage return) and 0x7F (DEL).
+    Allows all valid path characters (spaces, brackets, unicode, etc.) to be safely handled by shlex.
+    """
+    if not s:
+        return ""
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in s):
+        raise ValueError(f"Security Alert: Input contains illegal PTY control character(s): {repr(s)}")
+    return s
+
+def is_valid_image(path: str, min_size: int = 4096) -> bool:
+    """
+    Verifies image integrity using binary magic bytes and Pillow structural decoding.
+    Rejects truncated files, zero-byte stubs, and HTML error responses (e.g. 502/504 Bad Gateway).
+    """
+    if not path or not os.path.exists(path):
+        return False
+    try:
+        if os.path.getsize(path) < min_size:
+            return False
+        with open(path, "rb") as f:
+            header = f.read(8)
+            # PNG magic: \x89PNG\r\n\x1a\n ; JPEG magic: \xff\xd8\xff
+            if not (header.startswith(b"\x89PNG\r\n\x1a\n") or header.startswith(b"\xff\xd8\xff")):
+                return False
+        with Image.open(path) as img:
+            img.verify()
+        return True
+    except Exception:
+        return False
+
+def atomic_write_bytes(target_path: str, data: bytes) -> None:
+    """
+    Atomically writes binary data to target_path using POSIX rename(2).
+    Eliminates TOCTOU race conditions and never follows symlinks on destination.
+    """
+    target_dir = os.path.dirname(os.path.abspath(target_path))
+    os.makedirs(target_dir, exist_ok=True)
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=target_dir, prefix=".tmp_write_", suffix=".bin")
+    try:
+        with os.fdopen(tmp_fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, target_path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        raise
+
+def atomic_write_text(target_path: str, text: str, encoding: str = "utf-8") -> None:
+    """
+    Atomically writes text to target_path.
+    """
+    atomic_write_bytes(target_path, text.encode(encoding))
+
+def atomic_save_pptx(prs, output_pptx: str) -> None:
+    """
+    Atomically saves python-pptx presentation to output_pptx.
+    """
+    target_dir = os.path.dirname(os.path.abspath(output_pptx))
+    os.makedirs(target_dir, exist_ok=True)
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=target_dir, prefix=".tmp_pptx_", suffix=".pptx")
+    os.close(tmp_fd)
+    try:
+        prs.save(tmp_path)
+        os.replace(tmp_path, output_pptx)
+    except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        raise
 
 DEFAULT_PALETTE = [
     "rgb(255, 0, 0)",      # Red
@@ -83,6 +168,7 @@ def extract_short_name(model_id):
     if 'retv' in name.lower():
         idx = name.lower().find('retv')
         name = name[idx:]
+    name = re.sub(r'[^a-zA-Z0-9._-]', '_', name)
     return name
 
 def normalize_hpc_cluster(cluster, path):
@@ -185,6 +271,7 @@ def parse_model_entry(entry):
 
     cluster = normalize_hpc_cluster(cluster, path)
     name = custom_name if custom_name else extract_short_name(model_id)
+    name = re.sub(r'[^a-zA-Z0-9._-]', '_', name)
     return {'id': model_id, 'name': name, 'cluster': cluster, 'path': path, 'user': user}
 
 
@@ -355,52 +442,60 @@ def ensure_hpc_connection(cluster, models=None):
     if target == "gaea":
         target = "gaea-c5"
 
+    if target not in VALID_HPC_CLUSTERS:
+        print(f"[ERROR] Unsupported or invalid HPC cluster target: {target}", flush=True)
+        return False
+
     if is_hpc_online(target):
         return True
 
     hpc_bin = get_hpc_run_executable()
-    suggested_user = find_suggested_hpc_user(target, models)
+    suggested_user = find_suggested_hpc_user(target, models) or ""
+    # Reject newlines, NUL bytes, spaces, or shell control characters in username
+    if not re.match(r'^[a-zA-Z0-9._-]+$', suggested_user):
+        suggested_user = ""
 
     print(f"\n[HPC] Cluster '{target}' is offline or requires authentication.", flush=True)
     print(f"[HPC] Launching interactive Terminal for PIN + YubiKey authentication...", flush=True)
     print(f"[HPC] Please enter your credentials in the popup Terminal window (or close it to cancel).", flush=True)
 
     import time
-    status_file = f"/tmp/mats_hpc_auth_{target}_{os.getpid()}.status"
-    cmd_file = f"/tmp/mats_hpc_auth_{target}_{os.getpid()}.command"
-    tty_file = f"/tmp/mats_hpc_auth_{target}_{os.getpid()}.tty"
+    auth_tempdir = tempfile.mkdtemp(prefix=f"verif_auth_{target}_")
+    try:
+        os.chmod(auth_tempdir, 0o700)
+    except Exception:
+        pass
 
-    for p in [status_file, cmd_file, tty_file]:
-        if os.path.exists(p):
-            try:
-                os.remove(p)
-            except Exception:
-                pass
+    status_file = os.path.join(auth_tempdir, "auth.status")
+    cmd_file = os.path.join(auth_tempdir, "auth.command")
+    tty_file = os.path.join(auth_tempdir, "auth.tty")
 
     window_title = f"MATS_HPC_AUTH_{target.upper()}_{os.getpid()}"
+    target_env_suffix = target.upper().replace('-', '_')
 
+    # Safe quoting without outer double quotes to prevent syntax escape
     script_content = f"""#!/bin/bash
 unset PYTHONHOME
 unset PYTHONPATH
 CURRENT_TTY=$(tty)
-echo "$CURRENT_TTY" > "{tty_file}"
-printf "\\033]0;{window_title}\\007"
+echo "$CURRENT_TTY" > {shlex.quote(tty_file)}
+printf "\\033]0;{shlex.quote(window_title)}\\007"
 
 echo "========================================================"
 echo " NOAA GSL Verification Studio"
-echo " HPC Authentication for [{target.upper()}]"
+echo " HPC Authentication for [{shlex.quote(target.upper())}]"
 echo "========================================================"
 echo ""
 
-SUGGESTED_USER="{suggested_user}"
+SUGGESTED_USER={shlex.quote(suggested_user)}
 if [ -n "$SUGGESTED_USER" ]; then
-    export HPC_{target.upper().replace('-', '_')}_USER="$SUGGESTED_USER"
+    export HPC_{target_env_suffix}_USER="$SUGGESTED_USER"
     export HPC_USER="$SUGGESTED_USER"
 fi
 
-"{hpc_bin}" --start "{target}"
+{shlex.quote(hpc_bin)} --start {shlex.quote(target)}
 STATUS=$?
-echo "$STATUS" > "{status_file}"
+echo "$STATUS" > {shlex.quote(status_file)}
 
 if [ $STATUS -eq 0 ]; then
     echo ""
@@ -436,7 +531,7 @@ fi
 """
     with open(cmd_file, "w", encoding="utf-8") as f:
         f.write(script_content)
-    os.chmod(cmd_file, 0o755)
+    os.chmod(cmd_file, 0o700)
 
     try:
         subprocess.run(["open", "-a", "Terminal", cmd_file])
@@ -467,15 +562,14 @@ fi
         return False
     finally:
         close_terminal_by_tty(tty_file)
-        for p in [status_file, cmd_file, tty_file]:
-            if os.path.exists(p):
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
+        if os.path.exists(auth_tempdir):
+            try:
+                shutil.rmtree(auth_tempdir)
+            except Exception:
+                pass
 
 
-def fetch_remote_radar_images(models, cref_dir, radar_cases=None):
+def fetch_remote_radar_images(models, cref_dir, radar_cases=None, force_fetch=False):
     """
     Automated synoptic radar comparison image retrieval:
     Checks if evaluated models have remote HPC (gaea, hercules, etc.) or local paths specified.
@@ -508,8 +602,10 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None):
             fhr_dir = f"{cdate}{cycle}{fhr:02d}"
             local_filename = f"{short_name}_{cdate}_{cycle}z_f{fhr:02d}.png"
             local_path = os.path.join(cref_dir, local_filename)
-            if not (os.path.exists(local_path) and os.path.getsize(local_path) > 10000):
+            if force_fetch or not is_valid_image(local_path):
                 needed_cases.append((orig_idx, cdate, cycle, fhr, case_title, fhr_str, fhr_dir, local_filename, local_path))
+            else:
+                print(f"  [CACHE HIT] Using cached: {local_filename}", flush=True)
 
         if not needed_cases:
             print(f"\n>>> Checking synoptic radar images for [{short_name}] on {cluster or 'local'}...", flush=True)
@@ -540,7 +636,9 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None):
 
             if is_remote:
                 target_cluster = cluster
-                check_script = "for cand in " + " ".join([f'"{c}"' for c in candidates]) + '; do if [ -f "$cand" ]; then base64 -w 0 "$cand"; exit 0; fi; done'
+                cands_clean = [reject_pty_control_chars(c) for c in candidates]
+                escaped_cands = " ".join(shlex.quote(c) for c in cands_clean)
+                check_script = f'for cand in {escaped_cands}; do if [ -f "$cand" ]; then base64 -w 0 "$cand"; exit 0; fi; done'
                 try:
                     res = subprocess.run(
                         [hpc_bin, target_cluster, check_script],
@@ -551,9 +649,8 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None):
                     )
                     if res.returncode == 0 and res.stdout.strip():
                         data = base64.b64decode(res.stdout.strip())
-                        with open(local_path, "wb") as f:
-                            f.write(data)
-                        print(f"  [DOWNLOADED] {local_filename} from {target_cluster} ({len(data)} bytes)", flush=True)
+                        atomic_write_bytes(local_path, data)
+                        print(f"  [CACHE MISS] Downloaded fresh image: {local_filename} from {target_cluster} ({len(data)} bytes)", flush=True)
                     else:
                         print(f"  [NOTICE] No remote radar image found for {local_filename} on {target_cluster}:{base_path}", flush=True)
                         if res.returncode != 0 and not is_hpc_online(target_cluster):
@@ -564,9 +661,8 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None):
                                     res_retry = subprocess.run([hpc_bin, target_cluster, check_script], capture_output=True, text=True, timeout=8, env=env)
                                     if res_retry.returncode == 0 and res_retry.stdout.strip():
                                         data = base64.b64decode(res_retry.stdout.strip())
-                                        with open(local_path, "wb") as f:
-                                            f.write(data)
-                                        print(f"  [DOWNLOADED] {local_filename} from {target_cluster} ({len(data)} bytes)", flush=True)
+                                        atomic_write_bytes(local_path, data)
+                                        print(f"  [CACHE MISS] Downloaded fresh image: {local_filename} from {target_cluster} ({len(data)} bytes)", flush=True)
                                 except Exception:
                                     pass
                             else:
@@ -588,7 +684,7 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None):
                 for cand in candidates:
                     if os.path.exists(cand):
                         shutil.copyfile(cand, local_path)
-                        print(f"  [COPIED] {local_filename} from local {cand}", flush=True)
+                        print(f"  [CACHE MISS] Copied fresh image: {local_filename} from local {cand}", flush=True)
                         found = True
                         break
                 if not found:
@@ -606,7 +702,7 @@ async def launch_browser(p, headless=True):
     # Fallback to bundled or standard Playwright Chromium
     return await p.chromium.launch(headless=headless, args=['--disable-blink-features=AutomationControlled'])
 
-async def fetch_mrms_radar_images(p, cref_dir, radar_cases=None):
+async def fetch_mrms_radar_images(p, cref_dir, radar_cases=None, force_fetch=False):
     """
     Automated MRMS observation retrieval directly from NOAA NSSL MRMS Product Viewer:
     https://mrms.nssl.noaa.gov/qvs/product_viewer/
@@ -624,8 +720,10 @@ async def fetch_mrms_radar_images(p, cref_dir, radar_cases=None):
     for orig_idx, cdate, cycle, fhr, case_title in cases:
         mrms_fn = f"mrms_{cdate}_{cycle}z_f{fhr:02d}.png"
         target_path = os.path.join(cref_dir, mrms_fn)
-        if not (os.path.exists(target_path) and os.path.getsize(target_path) > 10000):
+        if force_fetch or not is_valid_image(target_path):
             needed.append((orig_idx, cdate, cycle, fhr, case_title, target_path, mrms_fn))
+        else:
+            print(f"  [CACHE HIT] Using cached: {mrms_fn}", flush=True)
 
     if not needed:
         print("  [ALL CACHED] All MRMS observation radar images already available locally.", flush=True)
@@ -664,8 +762,10 @@ async def fetch_mrms_radar_images(p, cref_dir, radar_cases=None):
                         y = b_box["y"]
                         w = (l_box["x"] + l_box["width"]) - x
                         h = max(b_box["height"], l_box["height"]) + 3
-                        await page.screenshot(path=target_path, clip={"x": x, "y": y, "width": w, "height": h})
-                        print(f"    [DONE] Saved {mrms_fn} ({os.path.getsize(target_path)} bytes)")
+                        tmp_target_path = target_path + f".tmp.{os.getpid()}.png"
+                        await page.screenshot(path=tmp_target_path, clip={"x": x, "y": y, "width": w, "height": h})
+                        os.replace(tmp_target_path, target_path)
+                        print(f"    [CACHE MISS] Downloaded fresh MRMS observation: {mrms_fn} ({os.path.getsize(target_path)} bytes)")
                         continue
 
                 print(f"    [WARNING] Could not locate map/legend selectors for {mrms_fn}")
@@ -819,15 +919,14 @@ async def export_styled_chart(page, outpath, color_map, width=1761, height=857, 
     }}''')
     if img_data and img_data.startswith('data:image/png;base64,'):
         data = base64.b64decode(img_data.split(',', 1)[1])
-        with open(outpath, 'wb') as f:
-            f.write(data)
-        print(f"  [SUCCESS] Exported: {os.path.basename(outpath)} ({len(data)} bytes)")
+        atomic_write_bytes(outpath, data)
+        print(f"  [CACHE MISS] Exported fresh chart: {os.path.basename(outpath)} ({len(data)} bytes)")
         return True
     print(f"  [FAILED] Export failed for {os.path.basename(outpath)}")
     return False
 
 
-async def fetch_surface_dieoff(p, models, sfc_dates, color_map, out_dir, regions=None):
+async def fetch_surface_dieoff(p, models, sfc_dates, color_map, out_dir, regions=None, force_fetch=False):
     regions = regions or ["all"]
     print(f"\n>>> [1/8] Fetching Surface Dieoff Charts (Regions: {', '.join(regions)})...")
     browser = await launch_browser(p)
@@ -859,8 +958,8 @@ async def fetch_surface_dieoff(p, models, sfc_dates, color_map, out_dir, regions
         for var, vtag in vars_list:
             fn = f"surface_dieoff_{vtag}{reg_tag}.png"
             outpath = os.path.join(out_dir, fn)
-            if os.path.exists(outpath) and os.path.getsize(outpath) > 10000:
-                print(f"  [CACHED] {fn}")
+            if not force_fetch and is_valid_image(outpath):
+                print(f"  [CACHE HIT] Using cached: {fn}")
                 continue
                 
             b = await launch_browser(p)
@@ -914,7 +1013,7 @@ async def fetch_surface_dieoff(p, models, sfc_dates, color_map, out_dir, regions
                 await b.close()
 
 
-async def fetch_surface_timeseries(p, models, sfc_dates, color_map, out_dir, regions=None):
+async def fetch_surface_timeseries(p, models, sfc_dates, color_map, out_dir, regions=None, force_fetch=False):
     regions = regions or ["all"]
     print(f"\n>>> [2/8] Fetching Surface Time Series (1h, 3h, 12h, 24h; Regions: {', '.join(regions)})...")
     browser = await launch_browser(p)
@@ -967,8 +1066,8 @@ async def fetch_surface_timeseries(p, models, sfc_dates, color_map, out_dir, reg
         for fhr, stat, var, base_fn in configs:
             fn = base_fn.replace(".png", f"{reg_tag}.png")
             outpath = os.path.join(out_dir, fn)
-            if os.path.exists(outpath) and os.path.getsize(outpath) > 10000:
-                print(f"  [CACHED] {fn}")
+            if not force_fetch and is_valid_image(outpath):
+                print(f"  [CACHE HIT] Using cached: {fn}")
                 continue
                 
             b = await launch_browser(p)
@@ -1005,7 +1104,7 @@ async def fetch_surface_timeseries(p, models, sfc_dates, color_map, out_dir, reg
                 await b.close()
 
 
-async def fetch_upperair_dieoff(p, models, ua_dates, color_map, out_dir, regions=None):
+async def fetch_upperair_dieoff(p, models, ua_dates, color_map, out_dir, regions=None, force_fetch=False):
     regions = regions or ["all"]
     print(f"\n>>> [3/8] Fetching Upper Air Dieoff against RAOBs (Regions: {', '.join(regions)})...")
     browser = await launch_browser(p)
@@ -1037,8 +1136,8 @@ async def fetch_upperair_dieoff(p, models, ua_dates, color_map, out_dir, regions
         for var, base_fn in vars_list:
             fn = base_fn.replace(".png", f"{reg_tag}.png")
             outpath = os.path.join(out_dir, fn)
-            if os.path.exists(outpath) and os.path.getsize(outpath) > 10000:
-                print(f"  [CACHED] {fn}")
+            if not force_fetch and is_valid_image(outpath):
+                print(f"  [CACHE HIT] Using cached: {fn}")
                 continue
                 
             b = await launch_browser(p)
@@ -1090,7 +1189,7 @@ async def fetch_upperair_dieoff(p, models, ua_dates, color_map, out_dir, regions
                 await b.close()
 
 
-async def fetch_upperair_profiles(p, models, ua_dates, color_map, out_dir, regions=None):
+async def fetch_upperair_profiles(p, models, ua_dates, color_map, out_dir, regions=None, force_fetch=False):
     regions = regions or ["all"]
     print(f"\n>>> [4/8] Fetching Upper Air Profiles (1h, 3h, 6h, 12h; Regions: {', '.join(regions)})...")
     browser = await launch_browser(p)
@@ -1131,8 +1230,8 @@ async def fetch_upperair_profiles(p, models, ua_dates, color_map, out_dir, regio
         for fhr, var, base_fn in configs:
             fn = base_fn.replace(".png", f"{reg_tag}.png")
             outpath = os.path.join(out_dir, fn)
-            if os.path.exists(outpath) and os.path.getsize(outpath) > 10000:
-                print(f"  [CACHED] {fn}")
+            if not force_fetch and is_valid_image(outpath):
+                print(f"  [CACHE HIT] Using cached: {fn}")
                 continue
                 
             b = await launch_browser(p)
@@ -1184,7 +1283,7 @@ async def fetch_upperair_profiles(p, models, ua_dates, color_map, out_dir, regio
                 await b.close()
 
 
-async def fetch_upperair_amdar(p, models, ua_dates, color_map, out_dir):
+async def fetch_upperair_amdar(p, models, ua_dates, color_map, out_dir, force_fetch=False):
     print("\n>>> [5/8] Checking Upper Air AMDAR Verification (Dieoff & Profiles)...")
     browser = await launch_browser(p)
     context = await browser.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
@@ -1212,8 +1311,8 @@ async def fetch_upperair_amdar(p, models, ua_dates, color_map, out_dir):
     ]
     for var, fn in vars_list:
         outpath = os.path.join(out_dir, fn)
-        if os.path.exists(outpath) and os.path.getsize(outpath) > 10000:
-            print(f"  [CACHED] {fn}")
+        if not force_fetch and is_valid_image(outpath):
+            print(f"  [CACHE HIT] Using cached: {fn}")
             continue
             
         b = await launch_browser(p)
@@ -1284,8 +1383,8 @@ async def fetch_upperair_amdar(p, models, ua_dates, color_map, out_dir):
     ]
     for fhr, var, fn in amdar_prof_configs:
         outpath = os.path.join(out_dir, fn)
-        if os.path.exists(outpath) and os.path.getsize(outpath) > 10000:
-            print(f"  [CACHED] {fn}")
+        if not force_fetch and is_valid_image(outpath):
+            print(f"  [CACHE HIT] Using cached: {fn}")
             continue
 
         b = await launch_browser(p)
@@ -1341,7 +1440,7 @@ async def fetch_upperair_amdar(p, models, ua_dates, color_map, out_dir):
             await b.close()
 
 
-async def fetch_reflectivity(p, models, sfc_dates, color_map, out_dir, regions=None):
+async def fetch_reflectivity(p, models, sfc_dates, color_map, out_dir, regions=None, force_fetch=False):
     regions = regions or ["all"]
     print(f"\n>>> [6/8] Fetching Composite Reflectivity Verification (Dieoff & 1h/3h TS for 15, 25, 35 dBZ; Regions: {', '.join(regions)})...")
     browser = await launch_browser(p)
@@ -1380,7 +1479,7 @@ async def fetch_reflectivity(p, models, sfc_dates, color_map, out_dir, regions=N
             out_bias = os.path.join(out_dir, fn_bias)
 
             # Dieoff CSI
-            if not (os.path.exists(out_csi) and os.path.getsize(out_csi) > 10000):
+            if force_fetch or not is_valid_image(out_csi):
                 b = await launch_browser(p)
                 c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                 pg = await c.new_page()
@@ -1416,10 +1515,10 @@ async def fetch_reflectivity(p, models, sfc_dates, color_map, out_dir, regions=N
                 finally:
                     await b.close()
             else:
-                print(f"  [CACHED] {fn_csi}")
+                print(f"  [CACHE HIT] Using cached: {fn_csi}")
 
             # Dieoff Bias
-            if not (os.path.exists(out_bias) and os.path.getsize(out_bias) > 10000):
+            if force_fetch or not is_valid_image(out_bias):
                 b = await launch_browser(p)
                 c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                 pg = await c.new_page()
@@ -1455,7 +1554,7 @@ async def fetch_reflectivity(p, models, sfc_dates, color_map, out_dir, regions=N
                 finally:
                     await b.close()
             else:
-                print(f"  [CACHED] {fn_bias}")
+                print(f"  [CACHE HIT] Using cached: {fn_bias}")
 
         # 2. Time Series: 1-h and 3-h fcst (CSI & Bias)
         for fhr in ["1", "3"]:
@@ -1466,7 +1565,7 @@ async def fetch_reflectivity(p, models, sfc_dates, color_map, out_dir, regions=N
                 out_bias = os.path.join(out_dir, fn_bias)
 
                 # TS CSI
-                if not (os.path.exists(out_csi) and os.path.getsize(out_csi) > 10000):
+                if force_fetch or not is_valid_image(out_csi):
                     b = await launch_browser(p)
                     c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                     pg = await c.new_page()
@@ -1502,10 +1601,10 @@ async def fetch_reflectivity(p, models, sfc_dates, color_map, out_dir, regions=N
                     finally:
                         await b.close()
                 else:
-                    print(f"  [CACHED] {fn_csi}")
+                    print(f"  [CACHE HIT] Using cached: {fn_csi}")
 
                 # TS Bias
-                if not (os.path.exists(out_bias) and os.path.getsize(out_bias) > 10000):
+                if force_fetch or not is_valid_image(out_bias):
                     b = await launch_browser(p)
                     c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                     pg = await c.new_page()
@@ -1541,10 +1640,10 @@ async def fetch_reflectivity(p, models, sfc_dates, color_map, out_dir, regions=N
                     finally:
                         await b.close()
                 else:
-                    print(f"  [CACHED] {fn_bias}")
+                    print(f"  [CACHE HIT] Using cached: {fn_bias}")
 
 
-async def fetch_ceiling(p, models, sfc_dates, color_map, out_dir, regions=None):
+async def fetch_ceiling(p, models, sfc_dates, color_map, out_dir, regions=None, force_fetch=False):
     regions = regions or ["all"]
     print(f"\n>>> [7/8] Fetching Ceiling Verification (Dieoff & 1h/3h TS; Regions: {', '.join(regions)})...")
     browser = await launch_browser(p)
@@ -1582,7 +1681,7 @@ async def fetch_ceiling(p, models, sfc_dates, color_map, out_dir, regions=None):
             out_csi = os.path.join(out_dir, fn_csi)
             out_bias = os.path.join(out_dir, fn_bias)
             
-            if not (os.path.exists(out_csi) and os.path.getsize(out_csi) > 10000):
+            if force_fetch or not is_valid_image(out_csi):
                 b = await launch_browser(p)
                 c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                 pg = await c.new_page()
@@ -1618,9 +1717,9 @@ async def fetch_ceiling(p, models, sfc_dates, color_map, out_dir, regions=None):
                 finally:
                     await b.close()
             else:
-                print(f"  [CACHED] {fn_csi}")
+                print(f"  [CACHE HIT] Using cached: {fn_csi}")
                 
-            if not (os.path.exists(out_bias) and os.path.getsize(out_bias) > 10000):
+            if force_fetch or not is_valid_image(out_bias):
                 b = await launch_browser(p)
                 c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                 pg = await c.new_page()
@@ -1656,7 +1755,7 @@ async def fetch_ceiling(p, models, sfc_dates, color_map, out_dir, regions=None):
                 finally:
                     await b.close()
             else:
-                print(f"  [CACHED] {fn_bias}")
+                print(f"  [CACHE HIT] Using cached: {fn_bias}")
 
         # 2. Time Series: 1-h and 3-h fcst
         for fhr in ["1", "3"]:
@@ -1666,7 +1765,7 @@ async def fetch_ceiling(p, models, sfc_dates, color_map, out_dir, regions=None):
                 out_csi = os.path.join(out_dir, fn_csi)
                 out_bias = os.path.join(out_dir, fn_bias)
 
-                if not (os.path.exists(out_csi) and os.path.getsize(out_csi) > 10000):
+                if force_fetch or not is_valid_image(out_csi):
                     b = await launch_browser(p)
                     c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                     pg = await c.new_page()
@@ -1702,9 +1801,9 @@ async def fetch_ceiling(p, models, sfc_dates, color_map, out_dir, regions=None):
                     finally:
                         await b.close()
                 else:
-                    print(f"  [CACHED] {fn_csi}")
+                    print(f"  [CACHE HIT] Using cached: {fn_csi}")
 
-                if not (os.path.exists(out_bias) and os.path.getsize(out_bias) > 10000):
+                if force_fetch or not is_valid_image(out_bias):
                     b = await launch_browser(p)
                     c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                     pg = await c.new_page()
@@ -1740,10 +1839,10 @@ async def fetch_ceiling(p, models, sfc_dates, color_map, out_dir, regions=None):
                     finally:
                         await b.close()
                 else:
-                    print(f"  [CACHED] {fn_bias}")
+                    print(f"  [CACHE HIT] Using cached: {fn_bias}")
 
 
-async def fetch_visibility(p, models, sfc_dates, color_map, out_dir, regions=None):
+async def fetch_visibility(p, models, sfc_dates, color_map, out_dir, regions=None, force_fetch=False):
     regions = regions or ["all"]
     print(f"\n>>> [8/8] Fetching Visibility Verification (Dieoff & 1h/3h TS; Regions: {', '.join(regions)})...")
     thresholds = [
@@ -1781,7 +1880,7 @@ async def fetch_visibility(p, models, sfc_dates, color_map, out_dir, regions=Non
             out_csi = os.path.join(out_dir, fn_csi)
             out_bias = os.path.join(out_dir, fn_bias)
             
-            if not (os.path.exists(out_csi) and os.path.getsize(out_csi) > 10000):
+            if force_fetch or not is_valid_image(out_csi):
                 b = await launch_browser(p)
                 c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                 pg = await c.new_page()
@@ -1817,9 +1916,9 @@ async def fetch_visibility(p, models, sfc_dates, color_map, out_dir, regions=Non
                 finally:
                     await b.close()
             else:
-                print(f"  [CACHED] {fn_csi}")
+                print(f"  [CACHE HIT] Using cached: {fn_csi}")
                 
-            if not (os.path.exists(out_bias) and os.path.getsize(out_bias) > 10000):
+            if force_fetch or not is_valid_image(out_bias):
                 b = await launch_browser(p)
                 c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                 pg = await c.new_page()
@@ -1855,7 +1954,7 @@ async def fetch_visibility(p, models, sfc_dates, color_map, out_dir, regions=Non
                 finally:
                     await b.close()
             else:
-                print(f"  [CACHED] {fn_bias}")
+                print(f"  [CACHE HIT] Using cached: {fn_bias}")
                 
         # 2. Time Series: 1-h and 3-h fcst (CSI & Bias)
         for fhr in ["1", "3"]:
@@ -1865,7 +1964,7 @@ async def fetch_visibility(p, models, sfc_dates, color_map, out_dir, regions=Non
                 out_csi = os.path.join(out_dir, fn_csi)
                 out_bias = os.path.join(out_dir, fn_bias)
                 
-                if not (os.path.exists(out_csi) and os.path.getsize(out_csi) > 10000):
+                if force_fetch or not is_valid_image(out_csi):
                     b = await launch_browser(p)
                     c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                     pg = await c.new_page()
@@ -1901,9 +2000,9 @@ async def fetch_visibility(p, models, sfc_dates, color_map, out_dir, regions=Non
                     finally:
                         await b.close()
                 else:
-                    print(f"  [CACHED] {fn_csi}")
+                    print(f"  [CACHE HIT] Using cached: {fn_csi}")
                     
-                if not (os.path.exists(out_bias) and os.path.getsize(out_bias) > 10000):
+                if force_fetch or not is_valid_image(out_bias):
                     b = await launch_browser(p)
                     c = await b.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                     pg = await c.new_page()
@@ -1939,7 +2038,7 @@ async def fetch_visibility(p, models, sfc_dates, color_map, out_dir, regions=Non
                     finally:
                         await b.close()
                 else:
-                    print(f"  [CACHED] {fn_bias}")
+                    print(f"  [CACHE HIT] Using cached: {fn_bias}")
 
 
 def build_presentation(config, mats_dir, output_pptx):
@@ -2552,8 +2651,7 @@ def build_presentation(config, mats_dir, output_pptx):
             "cards": cards
         })
 
-    os.makedirs(os.path.dirname(os.path.abspath(output_pptx)), exist_ok=True)
-    prs.save(output_pptx)
+    atomic_save_pptx(prs, output_pptx)
     print(f"\n[DONE] Successfully created PowerPoint presentation: {output_pptx}")
     return slides_data
 
@@ -3505,8 +3603,7 @@ def build_html_report(config, mats_dir, output_html, slides_data):
         .replace("__SLIDES_HTML__", "".join(slides_html))
         .replace("__REGION_TABS__", region_tabs_str)
     )
-    with open(output_html, "w", encoding="utf-8") as f:
-        f.write(full_html)
+    atomic_write_text(output_html, full_html)
     print(f"[DONE] Successfully created HTML presentation: {output_html}")
 
 
@@ -3609,25 +3706,27 @@ async def main_async(args):
             print(f"  [WARNING] Failed to parse --radar-cases: {e}")
 
     config["skip_cref"] = getattr(args, "skip_cref", False)
+    force_fetch = getattr(args, "force_fetch", False) or config.get("force_fetch", False)
+    config["force_fetch"] = force_fetch
     radar_cases = get_radar_cases(config)
 
     # Step 0: Automated synoptic radar image retrieval if paths specified
     if not args.skip_fetch and not config["skip_cref"]:
-        fetch_remote_radar_images(models, cref_dir, radar_cases=radar_cases)
+        fetch_remote_radar_images(models, cref_dir, radar_cases=radar_cases, force_fetch=force_fetch)
 
     # Step 1: Fetch MATS charts and MRMS observations unless --skip-fetch
     if not args.skip_fetch:
         async with async_playwright() as p:
             if not config["skip_cref"]:
-                await fetch_mrms_radar_images(p, cref_dir, radar_cases=radar_cases)
-            await fetch_surface_dieoff(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"])
-            await fetch_surface_timeseries(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"])
-            await fetch_upperair_dieoff(p, models, ua_dates, color_map, mats_dir, regions=config["regions"])
-            await fetch_upperair_profiles(p, models, ua_dates, color_map, mats_dir, regions=config["regions"])
-            await fetch_upperair_amdar(p, models, ua_dates, color_map, mats_dir)
-            await fetch_reflectivity(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"])
-            await fetch_ceiling(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"])
-            await fetch_visibility(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"])
+                await fetch_mrms_radar_images(p, cref_dir, radar_cases=radar_cases, force_fetch=force_fetch)
+            await fetch_surface_dieoff(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
+            await fetch_surface_timeseries(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
+            await fetch_upperair_dieoff(p, models, ua_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
+            await fetch_upperair_profiles(p, models, ua_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
+            await fetch_upperair_amdar(p, models, ua_dates, color_map, mats_dir, force_fetch=force_fetch)
+            await fetch_reflectivity(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
+            await fetch_ceiling(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
+            await fetch_visibility(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
 
     # Step 2: Build PPTX and HTML reports
     slides_data = []
@@ -3657,6 +3756,7 @@ def main():
     parser.add_argument("--radar-cases", help="JSON string or file path specifying radar evaluation cases")
     parser.add_argument("--skip-cref", action="store_true", help="Skip radar composite reflectivity comparisons")
     parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching images (use existing images to build PPT & HTML)")
+    parser.add_argument("--force-fetch", action="store_true", help="Force re-fetching images from MATS and HPC, bypassing local cache")
     parser.add_argument("--skip-pptx", action="store_true", help="Skip generating PPTX")
     parser.add_argument("--skip-html", action="store_true", help="Skip generating HTML report")
     

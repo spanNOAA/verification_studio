@@ -677,7 +677,8 @@
               <div class="form-hint">Base name for generated PowerPoint (.pptx) and HTML (.html) presentations (no extension needed).</div>
             </div>
             <div class="col" style="display:flex; align-items:center; gap: 16px; padding-top: 22px;">
-              <label style="font-size:13px; cursor:pointer;"><input type="checkbox" id="skipFetch"> Generate PPT only (Skip fetch)</label>
+              <label style="font-size:13px; cursor:pointer;" title="Skip downloading images, use local cached plots to generate reports immediately"><input type="checkbox" id="skipFetch"> Generate PPT only (Skip fetch)</label>
+              <label style="font-size:13px; cursor:pointer; color:#b91c1c; font-weight:500;" title="Force re-fetching images from MATS and HPC, bypassing existing local cache"><input type="checkbox" id="forceFetch"> 🔄 Force Refresh (Override Cache)</label>
             </div>
           </div>
           <div class="row" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
@@ -1359,6 +1360,7 @@
       const uaDates = `${uaStart} - ${uaEnd}`;
       const baseName = getCleanReportBaseName();
       const skipFetch = document.getElementById('skipFetch').checked;
+      const forceFetch = document.getElementById('forceFetch').checked;
       const includeCref = document.getElementById('includeCref').checked;
 
       const regions = ['all'];
@@ -1381,6 +1383,7 @@
         sfc_dates: sfcDates, ua_dates: uaDates,
         report_name: baseName, pptx_name: baseName,
         skip_fetch: skipFetch,
+        force_fetch: forceFetch,
         include_cref: includeCref,
         radar_cases: activeRadarCases,
         regions: regions

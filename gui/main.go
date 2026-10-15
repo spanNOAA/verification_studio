@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/webview/webview_go"
 )
@@ -18,17 +19,119 @@ import (
 var uiHTML string
 
 type PipelineRequest struct {
-	Title       string   `json:"title"`
-	OutputDir   string   `json:"output_dir"`
-	ModelsText  string   `json:"models_text"`
-	SfcDates    string   `json:"sfc_dates"`
-	UaDates     string   `json:"ua_dates"`
-	ReportName  string   `json:"report_name"`
-	PptxName    string   `json:"pptx_name"`
+	Title       string          `json:"title"`
+	OutputDir   string          `json:"output_dir"`
+	ModelsText  string          `json:"models_text"`
+	SfcDates    string          `json:"sfc_dates"`
+	UaDates     string          `json:"ua_dates"`
+	ReportName  string          `json:"report_name"`
+	PptxName    string          `json:"pptx_name"`
 	SkipFetch   bool            `json:"skip_fetch"`
+	ForceFetch  bool            `json:"force_fetch"`
 	IncludeCref bool            `json:"include_cref"`
 	RadarCases  json.RawMessage `json:"radar_cases"`
 	Regions     []string        `json:"regions"`
+}
+
+var (
+	allowedPathsLock sync.RWMutex
+	allowedPathsMap  = make(map[string]bool)
+)
+
+func allowOpenPath(p string) {
+	if p == "" {
+		return
+	}
+	clean := filepath.Clean(p)
+	if real, err := filepath.EvalSymlinks(clean); err == nil {
+		clean = real
+	}
+	allowedPathsLock.Lock()
+	defer allowedPathsLock.Unlock()
+	allowedPathsMap[clean] = true
+}
+
+func validateDesktopDir(outDir string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		home = os.Getenv("HOME")
+	}
+	if home == "" {
+		return "", fmt.Errorf("unable to determine user home directory")
+	}
+	desktopDir := filepath.Join(home, "Desktop")
+	if err := os.MkdirAll(desktopDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to access Desktop directory: %w", err)
+	}
+
+	realDesktop, err := filepath.EvalSymlinks(desktopDir)
+	if err != nil {
+		realDesktop = filepath.Clean(desktopDir)
+	}
+
+	cleanOut := filepath.Clean(outDir)
+	if err := os.MkdirAll(cleanOut, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create output directory %s: %w", cleanOut, err)
+	}
+
+	realOut, err := filepath.EvalSymlinks(cleanOut)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve real path for output directory: %w", err)
+	}
+
+	rel, err := filepath.Rel(realDesktop, realOut)
+	if err != nil {
+		return "", fmt.Errorf("failed to calculate relative path: %w", err)
+	}
+
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("security restriction: GUI output directory must reside within ~/Desktop (got: %s)", cleanOut)
+	}
+
+	return realOut, nil
+}
+
+func validateReportName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "RRFSv2_Verification_Report", nil
+	}
+	if strings.ContainsAny(name, "/\\:*?\"<>|\r\n\x00") || strings.Contains(name, "..") {
+		return "", fmt.Errorf("invalid report name '%s': report name cannot contain path separators, control characters, or '..'", name)
+	}
+	for _, ext := range []string{".pptx", ".html", ".ppt"} {
+		if strings.HasSuffix(strings.ToLower(name), ext) {
+			name = name[:len(name)-len(ext)]
+		}
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "RRFSv2_Verification_Report", nil
+	}
+	return name, nil
+}
+
+func isPathAllowedToOpen(targetPath string) bool {
+	if targetPath == "" {
+		return false
+	}
+	clean := filepath.Clean(targetPath)
+	if real, err := filepath.EvalSymlinks(clean); err == nil {
+		clean = real
+	}
+	allowedPathsLock.RLock()
+	allowed := allowedPathsMap[clean]
+	allowedPathsLock.RUnlock()
+	if allowed {
+		return true
+	}
+	// Also allow if it is a directory strictly inside ~/Desktop
+	if fi, err := os.Stat(clean); err == nil && fi.IsDir() {
+		if _, err := validateDesktopDir(clean); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func getExecutableDir() string {
@@ -36,8 +139,6 @@ func getExecutableDir() string {
 	if err != nil {
 		return "."
 	}
-	// If inside a macOS .app bundle: .../MATS_Studio.app/Contents/MacOS/mats_studio
-	// We walk up to the directory containing the .app or mats_reporter
 	dir := filepath.Dir(exe)
 	if strings.Contains(dir, ".app/Contents/MacOS") {
 		dir = filepath.Clean(filepath.Join(dir, "../../.."))
@@ -47,7 +148,7 @@ func getExecutableDir() string {
 
 func chooseFolderNative() string {
 	if runtime.GOOS == "darwin" {
-		cmd := exec.Command("osascript", "-e", `POSIX path of (choose folder with prompt "Select Output Folder for Reports")`)
+		cmd := exec.Command("osascript", "-e", `POSIX path of (choose folder with prompt "Select Output Folder on Desktop" default location (path to desktop folder))`)
 		out, err := cmd.Output()
 		if err != nil {
 			return ""
@@ -67,6 +168,10 @@ func chooseFolderNative() string {
 
 func openPath(targetPath string) {
 	if targetPath == "" {
+		return
+	}
+	if !isPathAllowedToOpen(targetPath) {
+		fmt.Printf("[SECURITY BLOCKED] Disallowed path open attempt: %s\n", targetPath)
 		return
 	}
 	var cmd *exec.Cmd
@@ -196,6 +301,34 @@ func main() {
 		go func() {
 			scriptPath := findReporterScript(baseDir)
 
+			// 1. Strict security validation: Output directory MUST be strictly within ~/Desktop
+			validOutDir, err := validateDesktopDir(req.OutputDir)
+			if err != nil {
+				errMsg := fmt.Sprintf("\n[SECURITY ERROR] %v\n", err)
+				b, _ := json.Marshal(errMsg)
+				w.Dispatch(func() {
+					w.Eval(fmt.Sprintf("appendLog(%s)", string(b)))
+					w.Eval("onPipelineFinished(false, 'Output directory must be within ~/Desktop')")
+				})
+				return
+			}
+
+			// 2. Strict security validation: Report name cannot contain traversal or path separators
+			rawName := req.ReportName
+			if rawName == "" {
+				rawName = req.PptxName
+			}
+			baseName, err := validateReportName(rawName)
+			if err != nil {
+				errMsg := fmt.Sprintf("\n[SECURITY ERROR] %v\n", err)
+				b, _ := json.Marshal(errMsg)
+				w.Dispatch(func() {
+					w.Eval(fmt.Sprintf("appendLog(%s)", string(b)))
+					w.Eval("onPipelineFinished(false, 'Invalid report name')")
+				})
+				return
+			}
+
 			// Parse models: pass each non-empty trimmed line directly to python script
 			rawLines := strings.Split(req.ModelsText, "\n")
 			var modelArgs []string
@@ -207,21 +340,13 @@ func main() {
 				modelArgs = append(modelArgs, line)
 			}
 
-			baseName := req.ReportName
-			if baseName == "" {
-				baseName = req.PptxName
-			}
-			if baseName == "" {
-				baseName = "RRFSv2_Verification_Report"
-			}
-			for _, ext := range []string{".pptx", ".html", ".ppt"} {
-				if strings.HasSuffix(strings.ToLower(baseName), ext) {
-					baseName = baseName[:len(baseName)-len(ext)]
-				}
-			}
+			pptxPath := filepath.Join(validOutDir, baseName+".pptx")
+			htmlPath := filepath.Join(validOutDir, baseName+".html")
 
-			pptxPath := filepath.Join(req.OutputDir, baseName+".pptx")
-			htmlPath := filepath.Join(req.OutputDir, baseName+".html")
+			// Authorize UI to open these specific paths
+			allowOpenPath(validOutDir)
+			allowOpenPath(pptxPath)
+			allowOpenPath(htmlPath)
 
 			reportTitle := strings.TrimSpace(req.Title)
 			if reportTitle == "" {
@@ -231,7 +356,7 @@ func main() {
 			args := []string{
 				scriptPath,
 				"--title", reportTitle,
-				"--output-dir", req.OutputDir,
+				"--output-dir", validOutDir,
 				"--report-name", baseName,
 				"--output-pptx", pptxPath,
 				"--output-html", htmlPath,
@@ -248,21 +373,15 @@ func main() {
 				args = append(args, "--skip-fetch")
 			}
 
+			if req.ForceFetch {
+				args = append(args, "--force-fetch")
+			}
+
 			if req.IncludeCref {
-				crefDir := filepath.Clean(filepath.Join(req.OutputDir, "cref"))
-				refDir := filepath.Clean(filepath.Join(req.OutputDir, "extracted_retv4"))
-				if _, err := os.Stat(crefDir); os.IsNotExist(err) {
-					fallback := filepath.Clean(filepath.Join(baseDir, "..", "surface_uv_half", "cref"))
-					if _, err := os.Stat(fallback); err == nil {
-						crefDir = fallback
-					}
-				}
-				if _, err := os.Stat(refDir); os.IsNotExist(err) {
-					fallback := filepath.Clean(filepath.Join(baseDir, "..", "surface_uv_half", "extracted_retv4"))
-					if _, err := os.Stat(fallback); err == nil {
-						refDir = fallback
-					}
-				}
+				crefDir := filepath.Clean(filepath.Join(validOutDir, "cref"))
+				refDir := filepath.Clean(filepath.Join(validOutDir, "extracted_retv4"))
+				_ = os.MkdirAll(crefDir, 0o755)
+				_ = os.MkdirAll(refDir, 0o755)
 				args = append(args, "--cref-dir", crefDir)
 				args = append(args, "--extracted-ref-dir", refDir)
 
@@ -294,7 +413,7 @@ func main() {
 			sendOutput(fmt.Sprintf(" [Go Native Engine] Launching Python verification pipeline...\n"))
 			sendOutput(fmt.Sprintf(" Script  : %s\n", scriptPath))
 			sendOutput(fmt.Sprintf(" Title   : %s\n", req.Title))
-			sendOutput(fmt.Sprintf(" Output  : %s\n", req.OutputDir))
+			sendOutput(fmt.Sprintf(" Output  : %s\n", validOutDir))
 			sendOutput(fmt.Sprintf(" Report  : %s (.pptx / .html)\n", baseName))
 			sendOutput(fmt.Sprintf(" Regions : %s\n", strings.Join(req.Regions, ", ")))
 			sendOutput(fmt.Sprintf(" PPTX    : %s\n", pptxPath))
