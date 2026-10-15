@@ -616,14 +616,21 @@
             <span class="badge warn" id="modelBadge">⚠️ No Experiments Specified</span>
           </div>
 
-          <div class="form-group">
-            <label class="form-label" for="reportTitle">1. Report Title:</label>
-            <input type="text" id="reportTitle" class="form-control" value="" placeholder="e.g. RRFSv2 Model Verification & Performance Evaluation (optional)">
-            <div class="form-hint">Template: RRFSv2 Model Verification &amp; Performance Evaluation (leave blank to use default template)</div>
+          <div class="row" style="margin-bottom: 10px;">
+            <div class="col" style="min-width: 280px;">
+              <label class="form-label" for="reportTitle">1. Presentation Title (Slide 1):</label>
+              <input type="text" id="reportTitle" class="form-control" value="" placeholder="e.g. RRFSv2 Model Verification & Performance Evaluation (optional)">
+              <div class="form-hint">Displayed on presentation title slides (leave blank for standard template).</div>
+            </div>
+            <div class="col" style="min-width: 280px;">
+              <label class="form-label" for="reportName">2. Report File Name:</label>
+              <input type="text" id="reportName" class="form-control" value="RRFSv2_Verification_Report" placeholder="e.g. RRFSv2_Verification_Report">
+              <div class="form-hint">Base file name for generated .pptx and .html presentations (no extension needed).</div>
+            </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="outputDir">2. Output Directory:</label>
+            <label class="form-label" for="outputDir">3. Output Directory:</label>
             <div class="input-row">
               <input type="text" id="outputDir" class="form-control" value="__DEFAULT_OUTPUT_DIR__" placeholder="Directory path to save charts, PPT, and HTML report">
               <button type="button" class="btn btn-secondary" onclick="browseFolder()">📂 Browse...</button>
@@ -633,7 +640,7 @@
 
           <div class="form-group" style="margin-bottom: 4px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <label class="form-label" style="margin-bottom:0;">3. Experiments (One experiment per line):</label>
+              <label class="form-label" style="margin-bottom:0;">4. Experiments (One experiment per line):</label>
               <div class="btn-group">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="insertExampleModels()">📋 Insert Example</button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="clearModels()">🧹 Clear</button>
@@ -684,17 +691,6 @@
                   <span class="dt-calendar-btn">📅</span>
                 </div>
               </div>
-            </div>
-          </div>
-          <div class="row" style="margin-top: 10px;">
-            <div class="col">
-              <label class="form-label" for="reportName">Report File Name:</label>
-              <input type="text" id="reportName" class="form-control" value="RRFSv2_Verification_Report" placeholder="e.g. RRFSv2_Verification_Report">
-              <div class="form-hint">Base name for generated PowerPoint (.pptx) and HTML (.html) presentations (no extension needed).</div>
-            </div>
-            <div class="col" style="display:flex; align-items:center; gap: 16px; padding-top: 22px;">
-              <label style="font-size:13px; cursor:pointer;" title="Skip downloading images, use local cached plots to generate reports immediately"><input type="checkbox" id="skipFetch"> Generate PPT only (Skip fetch)</label>
-              <label style="font-size:13px; cursor:pointer; color:#b91c1c; font-weight:500;" title="Force re-fetching images from MATS and HPC, bypassing existing local cache"><input type="checkbox" id="forceFetch"> 🔄 Force Refresh (Override Cache)</label>
             </div>
           </div>
           <div class="row" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
@@ -788,17 +784,32 @@
           </div>
         </div>
 
-        <!-- 3. Actions Toolbar -->
-        <div class="actions-bar">
-          <div class="status-bar">
-            <span class="pulse" id="pulseIndicator"></span>
-            <span id="statusText" style="font-weight: 600; font-size: 13.5px; color: #1e293b;">Ready</span>
+        <!-- Global Execution Toolbar & Pipeline Modes -->
+        <div class="actions-bar" style="display:flex; flex-direction:column; gap:12px; align-items:stretch;">
+          <div style="display:flex; justify-content:space-between; align-items:center; width:100%; flex-wrap:wrap; gap:10px; padding-bottom:10px; border-bottom:1px solid #f1f5f9;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-size:12px; font-weight:700; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">⚙️ Global Pipeline &amp; Cache Modes:</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+              <label style="font-size:13px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px;" title="Skip all image fetching; use existing local cached plots to generate presentations immediately">
+                <input type="checkbox" id="skipFetch"> ⚡ Generate PPT only (Skip fetch)
+              </label>
+              <label style="font-size:13px; font-weight:600; cursor:pointer; color:#b91c1c; display:flex; align-items:center; gap:6px;" title="Global Cache Override: Force re-fetching fresh images for BOTH MATS verification curves and Composite Reflectivity radar maps, bypassing local cache">
+                <input type="checkbox" id="forceFetch"> 🔄 Force Refresh (Override All Cache: MATS + Reflectivity)
+              </label>
+            </div>
           </div>
-          <div class="btn-group">
-            <button type="button" class="btn btn-secondary" onclick="openOutputDirectory()">📂 Open Folder</button>
-            <button type="button" class="btn btn-secondary" onclick="openPPTFile()">📊 Open PPT</button>
-            <button type="button" class="btn btn-secondary" onclick="openHTMLFile()">🌐 Open HTML</button>
-            <button type="button" class="btn btn-primary" id="btnStart" onclick="startRun()">🚀 Start Automated Generation</button>
+          <div style="display:flex; justify-content:space-between; align-items:center; width:100%; flex-wrap:wrap; gap:12px;">
+            <div class="status-bar">
+              <span class="pulse" id="pulseIndicator"></span>
+              <span id="statusText" style="font-weight: 600; font-size: 13.5px; color: #1e293b;">Ready</span>
+            </div>
+            <div class="btn-group">
+              <button type="button" class="btn btn-secondary" onclick="openOutputDirectory()">📂 Open Folder</button>
+              <button type="button" class="btn btn-secondary" onclick="openPPTFile()">📊 Open PPT</button>
+              <button type="button" class="btn btn-secondary" onclick="openHTMLFile()">🌐 Open HTML</button>
+              <button type="button" class="btn btn-primary" id="btnStart" onclick="startRun()">🚀 Start Automated Generation</button>
+            </div>
           </div>
         </div>
       </div>

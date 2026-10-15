@@ -3679,6 +3679,16 @@ async def main_async(args):
         color_map[m["id"]] = color
 
     config["models"] = models
+    config["skip_cref"] = getattr(args, "skip_cref", False)
+    force_fetch = getattr(args, "force_fetch", False) or config.get("force_fetch", False)
+    config["force_fetch"] = force_fetch
+
+    if args.skip_fetch:
+        cache_mode_str = "⚡ SKIP FETCH (Build presentations from local cache only)"
+    elif force_fetch:
+        cache_mode_str = "🔄 FORCE REFRESH (Override all cache: MATS + Reflectivity)"
+    else:
+        cache_mode_str = "Standard (Incremental cache with image integrity check)"
 
     print("=" * 60)
     print(" NOAA GSL Automated Verification & Presentation Tool")
@@ -3686,6 +3696,7 @@ async def main_async(args):
     print(f" Output Directory : {out_dir}")
     print(f" PPTX Report      : {output_pptx}")
     print(f" HTML Report      : {output_html}")
+    print(f" Cache Mode       : {cache_mode_str}")
     print(f" Regions ({len(norm_regions)})   : {', '.join([REGION_NAMES.get(r, r) for r in norm_regions])}")
     print(f" Models ({len(models)}):")
     for m in models:
@@ -3705,9 +3716,6 @@ async def main_async(args):
         except Exception as e:
             print(f"  [WARNING] Failed to parse --radar-cases: {e}")
 
-    config["skip_cref"] = getattr(args, "skip_cref", False)
-    force_fetch = getattr(args, "force_fetch", False) or config.get("force_fetch", False)
-    config["force_fetch"] = force_fetch
     radar_cases = get_radar_cases(config)
 
     # Step 0: Automated synoptic radar image retrieval if paths specified

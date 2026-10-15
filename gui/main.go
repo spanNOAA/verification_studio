@@ -415,6 +415,13 @@ func main() {
 			sendOutput(fmt.Sprintf(" Title   : %s\n", req.Title))
 			sendOutput(fmt.Sprintf(" Output  : %s\n", validOutDir))
 			sendOutput(fmt.Sprintf(" Report  : %s (.pptx / .html)\n", baseName))
+			if req.ForceFetch {
+				sendOutput(fmt.Sprintf(" Mode    : 🔄 FORCE REFRESH (Override all cache: MATS + Reflectivity)\n"))
+			} else if req.SkipFetch {
+				sendOutput(fmt.Sprintf(" Mode    : ⚡ SKIP FETCH (Build presentations from local cache only)\n"))
+			} else {
+				sendOutput(fmt.Sprintf(" Mode    : Standard (Incremental cache with image integrity check)\n"))
+			}
 			sendOutput(fmt.Sprintf(" Regions : %s\n", strings.Join(req.Regions, ", ")))
 			sendOutput(fmt.Sprintf(" PPTX    : %s\n", pptxPath))
 			sendOutput(fmt.Sprintf(" HTML    : %s\n", htmlPath))
