@@ -395,6 +395,57 @@
     .btn-secondary:hover { background: #e2e8f0; color: #0f172a; }
     .btn-sm { padding: 3px 8px; font-size: 11.5px; }
     .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .progress-box {
+      margin-bottom: 10px;
+      background: #ffffff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      flex-shrink: 0;
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .progress-stage {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e293b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 80%;
+    }
+    .progress-pct {
+      font-size: 13px;
+      font-weight: 800;
+      color: #2563eb;
+    }
+    .progress-track {
+      background: #e2e8f0;
+      border-radius: 999px;
+      height: 9px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-bar-fill {
+      background: linear-gradient(90deg, #2563eb, #3b82f6);
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
+    }
+    .progress-detail {
+      font-size: 11.5px;
+      color: #64748b;
+      margin-top: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .terminal-card {
       padding: 14px 16px;
     }
@@ -830,6 +881,19 @@
           <div class="card-title" style="margin-bottom: 8px;">
             <span>💻 Live Log Console</span>
             <button class="btn btn-secondary btn-sm" onclick="clearLogs()">🧹 Clear Log</button>
+          </div>
+          <!-- Real-Time Pipeline Progress Tracker -->
+          <div class="progress-box" id="progressContainer">
+            <div class="progress-header">
+              <span id="progressStage" class="progress-stage">⚡ Ready to start</span>
+              <span id="progressPct" class="progress-pct">0%</span>
+            </div>
+            <div class="progress-track">
+              <div id="progressFill" class="progress-bar-fill"></div>
+            </div>
+            <div id="progressDetail" class="progress-detail">
+              Idle · Click 'Start Automated Generation' to run pipeline
+            </div>
           </div>
           <div class="terminal-box" id="terminal">Ready. Click 'Start Automated Generation' to begin...</div>
         </div>
@@ -1383,6 +1447,25 @@
       updateModelBadge();
     }, 50);
 
+    function updateProgress(pct, stage, detail) {
+      const fill = document.getElementById('progressFill');
+      const pctEl = document.getElementById('progressPct');
+      const stageEl = document.getElementById('progressStage');
+      const detailEl = document.getElementById('progressDetail');
+
+      const p = Math.max(0, Math.min(100, parseInt(pct, 10)));
+      if (fill) fill.style.width = p + '%';
+      if (pctEl) pctEl.innerText = p + '%';
+      if (stage && stageEl) stageEl.innerText = stage;
+      if (detail && detailEl) detailEl.innerText = detail;
+
+      if (p === 100) {
+        if (fill) fill.style.background = 'linear-gradient(90deg, #16a34a, #22c55e)';
+      } else {
+        if (fill) fill.style.background = 'linear-gradient(90deg, #2563eb, #3b82f6)';
+      }
+    }
+
     async function startRun() {
       const rawTitle = document.getElementById('reportTitle').value.trim();
       const title = rawTitle || 'RRFSv2 Model Verification & Performance Evaluation';
@@ -1420,6 +1503,7 @@
       }
       document.getElementById('pulseIndicator').style.background = '#eab308';
       document.getElementById('statusText').innerText = 'Executing automated verification pipeline...';
+      updateProgress(0, '🚀 Initializing Pipeline', 'Preparing environment & verifying parameters...');
 
       const payload = JSON.stringify({
         title, output_dir: outputDir, models_text: modelsText,
@@ -1444,10 +1528,19 @@
         btnStop.innerText = '⏳ Stopping...';
       }
       document.getElementById('statusText').innerText = 'Stopping pipeline...';
+      const fill = document.getElementById('progressFill');
+      if (fill) fill.style.background = '#e11d48';
+      const stageEl = document.getElementById('progressStage');
+      if (stageEl) stageEl.innerText = '⏹ Stopping Pipeline...';
+      const detailEl = document.getElementById('progressDetail');
+      if (detailEl) detailEl.innerText = 'Cancellation signal sent. Waiting for processes to terminate...';
+
       if (window.stopPipelineNative) {
         window.stopPipelineNative();
       }
     }
+
+    let logBuffer = '';
 
     // Called from Go backend
     function appendLog(line) {
@@ -1457,6 +1550,20 @@
       }
       term.innerText += line;
       term.scrollTop = term.scrollHeight;
+
+      logBuffer += line;
+      const lines = logBuffer.split('\n');
+      logBuffer = lines.pop(); // keep trailing incomplete line
+
+      for (const l of lines) {
+        const match = l.match(/\[PROGRESS:\s*(\d+)%\](?:\s*\[(.*?)\])?(?:\s*\|\s*(.*))?/);
+        if (match) {
+          const pct = parseInt(match[1], 10);
+          const stage = match[2] || '';
+          const detail = match[3] || '';
+          updateProgress(pct, stage, detail);
+        }
+      }
     }
 
     function onPipelineFinished(success, message) {
@@ -1471,12 +1578,21 @@
       if (success) {
         document.getElementById('pulseIndicator').style.background = '#16a34a';
         document.getElementById('statusText').innerText = '✅ Generation Complete!';
+        updateProgress(100, '✅ Complete', 'Verification report generation finished successfully!');
       } else {
         document.getElementById('pulseIndicator').style.background = '#dc2626';
+        const fill = document.getElementById('progressFill');
+        if (fill) fill.style.background = '#dc2626';
+        const stageEl = document.getElementById('progressStage');
+        const detailEl = document.getElementById('progressDetail');
         if (message && message.toLowerCase().includes('stop')) {
           document.getElementById('statusText').innerText = '⏹ Pipeline Stopped by user.';
+          if (stageEl) stageEl.innerText = '⏹ Stopped';
+          if (detailEl) detailEl.innerText = 'Pipeline stopped by user.';
         } else {
           document.getElementById('statusText').innerText = '❌ Execution Error. Check log console.';
+          if (stageEl) stageEl.innerText = '❌ Failed';
+          if (detailEl) detailEl.innerText = 'Execution stopped due to error. Check logs below.';
         }
       }
     }
@@ -1484,6 +1600,7 @@
     function clearLogs() {
       document.getElementById('terminal').innerText = '';
     }
+
   </script>
 </body>
 </html>

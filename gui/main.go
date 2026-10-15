@@ -476,7 +476,7 @@ func main() {
 			sendOutput(fmt.Sprintf(" Python  : %s\n", pythonExe))
 			sendOutput(fmt.Sprintf("==================================================================\n\n"))
 
-			cmd := exec.Command(pythonExe, args...)
+			cmd := exec.Command(pythonExe, append([]string{"-u"}, args...)...)
 			env := append(os.Environ(),
 				"PYTHONUNBUFFERED=1",
 				"HPC_NON_INTERACTIVE=1",
