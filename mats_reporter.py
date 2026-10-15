@@ -48,13 +48,45 @@ def reject_pty_control_chars(s: str) -> str:
         raise ValueError(f"Security Alert: Input contains illegal PTY control character(s): {repr(s)}")
     return s
 
-def report_progress(percent: int, stage_title: str, detail: str = ""):
+def report_progress(total_pct: int, stage_pct: int = None, stage_title: str = ""):
     """
-    Outputs a structured progress marker consumed by Verification Studio GUI.
-    Format: [PROGRESS: <percent>%] [<stage_title>] | <detail>
+    Outputs a structured dual progress marker consumed by Verification Studio GUI.
+    Format: [PROGRESS: <total_pct>%, stage=<stage_pct>%] [<stage_title>]
     """
-    detail_str = f" | {detail}" if detail else ""
-    print(f"[PROGRESS: {percent}%] [{stage_title}]{detail_str}", flush=True)
+    t_pct = max(0, min(100, int(total_pct)))
+    s_pct = max(0, min(100, int(stage_pct))) if stage_pct is not None else t_pct
+    print(f"[PROGRESS: {t_pct}%, stage={s_pct}%] [{stage_title}]", flush=True)
+
+class PipelineProgressTracker:
+    """
+    Dynamic Stage Planner & Dual-Tier Progress Coordinator.
+    Computes smooth cumulative total progress (0% ~ 100%) and stage progress (0% ~ 100%).
+    """
+    def __init__(self, stages):
+        # stages is a list of (stage_id, stage_name, weight)
+        self.stages = stages
+        self.total_stages = len(stages)
+        total_weight = sum(w for _, _, w in stages) or 1.0
+        self.bounds = []
+        accum = 0.0
+        for _, _, w in stages:
+            start = (accum / total_weight) * 100.0
+            accum += w
+            end = (accum / total_weight) * 100.0
+            self.bounds.append((start, end))
+
+    def update(self, stage_idx: int, stage_pct: int):
+        stage_pct = max(0, min(100, int(stage_pct)))
+        stage_num = stage_idx + 1
+        _, stage_name, _ = self.stages[stage_idx]
+        stage_title = f"Stage {stage_num}/{self.total_stages}: {stage_name}"
+        start_pct, end_pct = self.bounds[stage_idx]
+        total_pct = int(start_pct + (end_pct - start_pct) * (stage_pct / 100.0))
+        report_progress(total_pct, stage_pct, stage_title)
+
+    def complete(self):
+        report_progress(100, 100, "Complete: Verification Report Ready")
+
 
 def is_valid_image(path: str, min_size: int = 4096) -> bool:
     """
@@ -584,7 +616,7 @@ fi
                 pass
 
 
-def fetch_remote_radar_images(models, cref_dir, radar_cases=None, force_fetch=False):
+def fetch_remote_radar_images(models, cref_dir, radar_cases=None, force_fetch=False, on_progress=None):
     """
     Automated synoptic radar comparison image retrieval:
     Checks if evaluated models have remote HPC (gaea, hercules, etc.) or local paths specified.
@@ -592,7 +624,7 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None, force_fetch=Fa
     """
     cases = radar_cases if radar_cases is not None else DEFAULT_RADAR_CASES
     if not cases:
-        report_progress(25, "Stage 1/6: HPC Radar Downloads", "No radar cases specified - skipped")
+        if on_progress: on_progress(100)
         return
 
     os.makedirs(cref_dir, exist_ok=True)
@@ -600,12 +632,12 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None, force_fetch=Fa
 
     models_with_path = [m for m in models if m.get("path")]
     if not models_with_path:
-        report_progress(25, "Stage 1/6: HPC Radar Downloads", "No remote model paths configured - skipped")
+        if on_progress: on_progress(100)
         return
 
     total_radar_items = len(models_with_path) * len(cases)
     current_radar_idx = 0
-    report_progress(1, "Stage 1/6: HPC Radar Downloads", f"Checking radar images ({total_radar_items} total)...")
+    if on_progress: on_progress(0)
 
     for m in models_with_path:
         base_path = m.get("path")
@@ -629,8 +661,8 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None, force_fetch=Fa
                 needed_cases.append((orig_idx, cdate, cycle, fhr, case_title, fhr_str, fhr_dir, local_filename, local_path))
             else:
                 current_radar_idx += 1
-                pct = int(1 + 24 * (current_radar_idx / total_radar_items))
-                report_progress(pct, "Stage 1/6: HPC Radar Downloads", f"[{current_radar_idx}/{total_radar_items}] {short_name} - Cached: {local_filename}")
+                if on_progress:
+                    on_progress(int(100 * (current_radar_idx / total_radar_items)))
                 print(f"  [CACHE HIT] Using cached: {local_filename}", flush=True)
 
         if not needed_cases:
@@ -646,6 +678,8 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None, force_fetch=Fa
                 if not conn_ok or not is_hpc_online(cluster):
                     print(f"  [NOTICE] HPC cluster '{cluster}' is offline. Skipping remote radar retrieval for [{short_name}].", flush=True)
                     current_radar_idx += len(needed_cases)
+                    if on_progress:
+                        on_progress(int(100 * (current_radar_idx / total_radar_items)))
                     continue
 
         env = os.environ.copy()
@@ -653,8 +687,8 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None, force_fetch=Fa
 
         for orig_idx, cdate, cycle, fhr, case_title, fhr_str, fhr_dir, local_filename, local_path in needed_cases:
             current_radar_idx += 1
-            pct = int(1 + 24 * (current_radar_idx / total_radar_items))
-            report_progress(pct, "Stage 1/6: HPC Radar Downloads", f"[{current_radar_idx}/{total_radar_items}] {short_name} - {local_filename}")
+            if on_progress:
+                on_progress(int(100 * (current_radar_idx / total_radar_items)))
             candidates = [
                 f"{base_path}/com/rrfs/v2.1.4/rrfs.{cdate}/{cycle}/graphics/det/full/{fhr_dir}/cref_full_sfc_f{fhr_str}.png",
                 f"{base_path}/rrfs.{cdate}/{cycle}/graphics/det/full/{fhr_dir}/cref_full_sfc_f{fhr_str}.png",
@@ -724,7 +758,9 @@ def fetch_remote_radar_images(models, cref_dir, radar_cases=None, force_fetch=Fa
                 if not found:
                     print(f"  [NOTICE] Local image not found: {local_filename}", flush=True)
 
-    report_progress(25, "Stage 1/6: HPC Radar Downloads", "HPC radar download complete")
+    if on_progress:
+        on_progress(100)
+
 
 
 
@@ -739,7 +775,7 @@ async def launch_browser(p, headless=True):
     # Fallback to bundled or standard Playwright Chromium
     return await p.chromium.launch(headless=headless, args=['--disable-blink-features=AutomationControlled'])
 
-async def fetch_mrms_radar_images(p, cref_dir, radar_cases=None, force_fetch=False):
+async def fetch_mrms_radar_images(p, cref_dir, radar_cases=None, force_fetch=False, on_progress=None):
     """
     Automated MRMS observation retrieval directly from NOAA NSSL MRMS Product Viewer:
     https://mrms.nssl.noaa.gov/qvs/product_viewer/
@@ -748,11 +784,11 @@ async def fetch_mrms_radar_images(p, cref_dir, radar_cases=None, force_fetch=Fal
     """
     cases = radar_cases if radar_cases is not None else DEFAULT_RADAR_CASES
     if not cases:
-        report_progress(50, "Stage 2/6: MRMS Observations", "No radar cases specified - skipped")
+        if on_progress: on_progress(100)
         return
 
     os.makedirs(cref_dir, exist_ok=True)
-    report_progress(25, "Stage 2/6: MRMS Observations", "Checking MRMS cache...")
+    if on_progress: on_progress(0)
     print("\n>>> Checking MRMS observations directly from NOAA NSSL Product Viewer...", flush=True)
 
     needed = []
@@ -765,13 +801,13 @@ async def fetch_mrms_radar_images(p, cref_dir, radar_cases=None, force_fetch=Fal
             needed.append((orig_idx, cdate, cycle, fhr, case_title, target_path, mrms_fn))
         else:
             current_mrms_idx += 1
-            pct = int(25 + 25 * (current_mrms_idx / total_cases))
-            report_progress(pct, "Stage 2/6: MRMS Observations", f"[{current_mrms_idx}/{total_cases}] Cached: {mrms_fn}")
+            if on_progress:
+                on_progress(int(100 * (current_mrms_idx / total_cases)))
             print(f"  [CACHE HIT] Using cached: {mrms_fn}", flush=True)
 
     if not needed:
         print("  [ALL CACHED] All MRMS observation radar images already available locally.", flush=True)
-        report_progress(50, "Stage 2/6: MRMS Observations", "All MRMS observations cached")
+        if on_progress: on_progress(100)
         return
 
     print(f"  [FETCHING] Downloading {len(needed)} MRMS observation images from NSSL Product Viewer...", flush=True)
@@ -782,8 +818,8 @@ async def fetch_mrms_radar_images(p, cref_dir, radar_cases=None, force_fetch=Fal
 
         for orig_idx, cdate, cycle, fhr, case_title, target_path, mrms_fn in needed:
             current_mrms_idx += 1
-            pct = int(25 + 25 * (current_mrms_idx / total_cases))
-            report_progress(pct, "Stage 2/6: MRMS Observations", f"[{current_mrms_idx}/{total_cases}] {case_title} ({mrms_fn})")
+            if on_progress:
+                on_progress(int(100 * (current_mrms_idx / total_cases)))
             try:
                 init_dt = datetime.datetime.strptime(f"{cdate}{cycle}", "%Y%m%d%H")
                 valid_dt = init_dt + datetime.timedelta(hours=fhr)
@@ -825,7 +861,9 @@ async def fetch_mrms_radar_images(p, cref_dir, radar_cases=None, force_fetch=Fal
         if browser:
             await browser.close()
 
-    report_progress(50, "Stage 2/6: MRMS Observations", "MRMS observations complete")
+    if on_progress:
+        on_progress(100)
+
 
 
 
@@ -3769,49 +3807,100 @@ async def main_async(args):
 
     radar_cases = get_radar_cases(config)
 
+    # Dynamic Stage Planning:
+    has_radar = (
+        not args.skip_fetch
+        and not config.get("skip_cref")
+        and bool(radar_cases)
+        and any(m.get("path") for m in models)
+    )
+
+    if args.skip_fetch:
+        stage_defs = [
+            ("reports", "Presentation & Reports", 100),
+        ]
+    elif has_radar:
+        stage_defs = [
+            ("hpc_radar", "HPC Radar Downloads", 20),
+            ("mrms", "MRMS Observations", 20),
+            ("surface", "MATS Surface Verification", 20),
+            ("upperair", "MATS Upper Air & AMDAR", 15),
+            ("refl_vis", "Reflectivity & Cloud/Vis", 13),
+            ("reports", "Presentation & Reports", 12),
+        ]
+    else:
+        stage_defs = [
+            ("surface", "MATS Surface Verification", 30),
+            ("upperair", "MATS Upper Air & AMDAR", 25),
+            ("refl_vis", "Reflectivity & Cloud/Vis", 20),
+            ("reports", "Presentation & Reports", 25),
+        ]
+
+    tracker = PipelineProgressTracker(stage_defs)
+    stage_map = {sid: idx for idx, (sid, _, _) in enumerate(stage_defs)}
+
     # Step 0: Automated synoptic radar image retrieval if paths specified
-    if not args.skip_fetch and not config["skip_cref"]:
-        fetch_remote_radar_images(models, cref_dir, radar_cases=radar_cases, force_fetch=force_fetch)
-    elif config.get("skip_cref"):
-        report_progress(50, "Radar Comparisons", "Radar & MRMS skipped by user configuration")
+    if has_radar:
+        hpc_idx = stage_map["hpc_radar"]
+        fetch_remote_radar_images(
+            models, cref_dir, radar_cases=radar_cases, force_fetch=force_fetch,
+            on_progress=lambda p: tracker.update(hpc_idx, p)
+        )
 
     # Step 1: Fetch MATS charts and MRMS observations unless --skip-fetch
     if not args.skip_fetch:
         async with async_playwright() as p:
-            if not config["skip_cref"]:
-                await fetch_mrms_radar_images(p, cref_dir, radar_cases=radar_cases, force_fetch=force_fetch)
-            report_progress(50, "Stage 3/6: MATS Surface Verification", "Starting Surface Dieoff...")
+            if has_radar:
+                mrms_idx = stage_map["mrms"]
+                await fetch_mrms_radar_images(
+                    p, cref_dir, radar_cases=radar_cases, force_fetch=force_fetch,
+                    on_progress=lambda p: tracker.update(mrms_idx, p)
+                )
+
+            sfc_idx = stage_map["surface"]
+            tracker.update(sfc_idx, 0)
             await fetch_surface_dieoff(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
-            report_progress(58, "Stage 3/6: MATS Surface Verification", "Starting Surface Time Series...")
+            tracker.update(sfc_idx, 50)
             await fetch_surface_timeseries(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
-            report_progress(65, "Stage 4/6: MATS Upper Air & AMDAR", "Starting Upper Air Dieoff against RAOBs...")
+            tracker.update(sfc_idx, 100)
+
+            ua_idx = stage_map["upperair"]
+            tracker.update(ua_idx, 0)
             await fetch_upperair_dieoff(p, models, ua_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
-            report_progress(70, "Stage 4/6: MATS Upper Air & AMDAR", "Starting Upper Air Profiles...")
+            tracker.update(ua_idx, 35)
             await fetch_upperair_profiles(p, models, ua_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
-            report_progress(75, "Stage 4/6: MATS Upper Air & AMDAR", "Starting AMDAR Aircraft Observations...")
+            tracker.update(ua_idx, 70)
             await fetch_upperair_amdar(p, models, ua_dates, color_map, mats_dir, force_fetch=force_fetch)
-            report_progress(80, "Stage 5/6: Reflectivity & Cloud/Vis", "Starting Reflectivity verification...")
+            tracker.update(ua_idx, 100)
+
+            refl_idx = stage_map["refl_vis"]
+            tracker.update(refl_idx, 0)
             await fetch_reflectivity(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
-            report_progress(84, "Stage 5/6: Reflectivity & Cloud/Vis", "Starting Ceiling verification...")
+            tracker.update(refl_idx, 40)
             await fetch_ceiling(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
-            report_progress(87, "Stage 5/6: Reflectivity & Cloud/Vis", "Starting Visibility verification...")
+            tracker.update(refl_idx, 70)
             await fetch_visibility(p, models, sfc_dates, color_map, mats_dir, regions=config["regions"], force_fetch=force_fetch)
-    else:
-        report_progress(90, "Stage 6/6: Presentation & Reports", "Using cached plots; generating presentations...")
+            tracker.update(refl_idx, 100)
 
     # Step 2: Build PPTX and HTML reports
+    rep_idx = stage_map["reports"]
+    tracker.update(rep_idx, 5)
+
     slides_data = []
     if not args.skip_pptx:
-        report_progress(90, "Stage 6/6: Presentation & Reports", "Compiling PowerPoint presentation (.pptx)...")
+        tracker.update(rep_idx, 15)
         slides_data = build_presentation(config, mats_dir, output_pptx)
+        tracker.update(rep_idx, 60)
     
     if not args.skip_html:
-        report_progress(95, "Stage 6/6: Presentation & Reports", "Compiling Interactive HTML Presentation (.html)...")
         if not slides_data:
             slides_data = build_presentation(config, mats_dir, output_pptx)
+        tracker.update(rep_idx, 70)
         build_html_report(config, mats_dir, output_html, slides_data)
+        tracker.update(rep_idx, 100)
 
-    report_progress(100, "Complete", "Verification report generation finished successfully!")
+    tracker.complete()
+
 
 
 def main():

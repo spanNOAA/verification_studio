@@ -408,26 +408,38 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
-    .progress-stage {
-      font-size: 13px;
+    .progress-label-total {
+      font-size: 11px;
+      font-weight: 700;
+      color: #334155;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .progress-stage-title {
+      font-size: 12.5px;
       font-weight: 700;
       color: #1e293b;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 80%;
+      max-width: 82%;
     }
-    .progress-pct {
-      font-size: 13px;
+    .progress-pct-total {
+      font-size: 12.5px;
       font-weight: 800;
       color: #2563eb;
+    }
+    .progress-pct-stage {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0284c7;
     }
     .progress-track {
       background: #e2e8f0;
       border-radius: 999px;
-      height: 9px;
+      height: 7.5px;
       overflow: hidden;
       position: relative;
     }
@@ -438,13 +450,12 @@
       border-radius: 999px;
       transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
     }
-    .progress-detail {
-      font-size: 11.5px;
-      color: #64748b;
-      margin-top: 6px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .progress-bar-stage-fill {
+      background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
     }
     .terminal-card {
       padding: 14px 16px;
@@ -882,17 +893,23 @@
             <span>💻 Live Log Console</span>
             <button class="btn btn-secondary btn-sm" onclick="clearLogs()">🧹 Clear Log</button>
           </div>
-          <!-- Real-Time Pipeline Progress Tracker -->
+          <!-- Real-Time Pipeline Dual Progress Tracker -->
           <div class="progress-box" id="progressContainer">
+            <!-- Row 1: Total Progress -->
             <div class="progress-header">
-              <span id="progressStage" class="progress-stage">⚡ Ready to start</span>
-              <span id="progressPct" class="progress-pct">0%</span>
+              <span class="progress-label-total">Total Progress</span>
+              <span id="progressTotalPct" class="progress-pct-total">0%</span>
+            </div>
+            <div class="progress-track" style="margin-bottom: 8px;">
+              <div id="progressTotalFill" class="progress-bar-fill"></div>
+            </div>
+            <!-- Row 2: Current Stage Progress -->
+            <div class="progress-header">
+              <span id="progressStageTitle" class="progress-stage-title">⚡ Ready to start</span>
+              <span id="progressStagePct" class="progress-pct-stage">0%</span>
             </div>
             <div class="progress-track">
-              <div id="progressFill" class="progress-bar-fill"></div>
-            </div>
-            <div id="progressDetail" class="progress-detail">
-              Idle · Click 'Start Automated Generation' to run pipeline
+              <div id="progressStageFill" class="progress-bar-stage-fill"></div>
             </div>
           </div>
           <div class="terminal-box" id="terminal">Ready. Click 'Start Automated Generation' to begin...</div>
@@ -1447,22 +1464,33 @@
       updateModelBadge();
     }, 50);
 
-    function updateProgress(pct, stage, detail) {
-      const fill = document.getElementById('progressFill');
-      const pctEl = document.getElementById('progressPct');
-      const stageEl = document.getElementById('progressStage');
-      const detailEl = document.getElementById('progressDetail');
+    function updateProgress(totalPct, stagePct, stageTitle) {
+      const totalFill = document.getElementById('progressTotalFill');
+      const totalPctEl = document.getElementById('progressTotalPct');
+      const stageFill = document.getElementById('progressStageFill');
+      const stagePctEl = document.getElementById('progressStagePct');
+      const stageTitleEl = document.getElementById('progressStageTitle');
 
-      const p = Math.max(0, Math.min(100, parseInt(pct, 10)));
-      if (fill) fill.style.width = p + '%';
-      if (pctEl) pctEl.innerText = p + '%';
-      if (stage && stageEl) stageEl.innerText = stage;
-      if (detail && detailEl) detailEl.innerText = detail;
+      const totP = Math.max(0, Math.min(100, parseInt(totalPct, 10)));
+      if (totalFill) totalFill.style.width = totP + '%';
+      if (totalPctEl) totalPctEl.innerText = totP + '%';
 
-      if (p === 100) {
-        if (fill) fill.style.background = 'linear-gradient(90deg, #16a34a, #22c55e)';
+      if (stagePct !== undefined && stagePct !== null) {
+        const stgP = Math.max(0, Math.min(100, parseInt(stagePct, 10)));
+        if (stageFill) stageFill.style.width = stgP + '%';
+        if (stagePctEl) stagePctEl.innerText = stgP + '%';
+      }
+
+      if (stageTitle && stageTitleEl) {
+        stageTitleEl.innerText = stageTitle;
+      }
+
+      if (totP === 100) {
+        if (totalFill) totalFill.style.background = 'linear-gradient(90deg, #16a34a, #22c55e)';
+        if (stageFill) stageFill.style.background = 'linear-gradient(90deg, #16a34a, #22c55e)';
       } else {
-        if (fill) fill.style.background = 'linear-gradient(90deg, #2563eb, #3b82f6)';
+        if (totalFill) totalFill.style.background = 'linear-gradient(90deg, #2563eb, #3b82f6)';
+        if (stageFill) stageFill.style.background = 'linear-gradient(90deg, #0ea5e9, #38bdf8)';
       }
     }
 
@@ -1503,7 +1531,7 @@
       }
       document.getElementById('pulseIndicator').style.background = '#eab308';
       document.getElementById('statusText').innerText = 'Executing automated verification pipeline...';
-      updateProgress(0, '🚀 Initializing Pipeline', 'Preparing environment & verifying parameters...');
+      updateProgress(0, 0, '🚀 Initializing Pipeline...');
 
       const payload = JSON.stringify({
         title, output_dir: outputDir, models_text: modelsText,
@@ -1528,12 +1556,12 @@
         btnStop.innerText = '⏳ Stopping...';
       }
       document.getElementById('statusText').innerText = 'Stopping pipeline...';
-      const fill = document.getElementById('progressFill');
-      if (fill) fill.style.background = '#e11d48';
-      const stageEl = document.getElementById('progressStage');
-      if (stageEl) stageEl.innerText = '⏹ Stopping Pipeline...';
-      const detailEl = document.getElementById('progressDetail');
-      if (detailEl) detailEl.innerText = 'Cancellation signal sent. Waiting for processes to terminate...';
+      const totalFill = document.getElementById('progressTotalFill');
+      if (totalFill) totalFill.style.background = '#e11d48';
+      const stageFill = document.getElementById('progressStageFill');
+      if (stageFill) stageFill.style.background = '#e11d48';
+      const stageTitleEl = document.getElementById('progressStageTitle');
+      if (stageTitleEl) stageTitleEl.innerText = '⏹ Stopping Pipeline...';
 
       if (window.stopPipelineNative) {
         window.stopPipelineNative();
@@ -1556,12 +1584,12 @@
       logBuffer = lines.pop(); // keep trailing incomplete line
 
       for (const l of lines) {
-        const match = l.match(/\[PROGRESS:\s*(\d+)%\](?:\s*\[(.*?)\])?(?:\s*\|\s*(.*))?/);
+        const match = l.match(/\[PROGRESS:\s*(\d+)%(?:,\s*stage=(\d+)%)?\](?:\s*\[(.*?)\])?/);
         if (match) {
-          const pct = parseInt(match[1], 10);
-          const stage = match[2] || '';
-          const detail = match[3] || '';
-          updateProgress(pct, stage, detail);
+          const totalPct = parseInt(match[1], 10);
+          const stagePct = match[2] !== undefined ? parseInt(match[2], 10) : totalPct;
+          const stageTitle = match[3] || '';
+          updateProgress(totalPct, stagePct, stageTitle);
         }
       }
     }
@@ -1578,24 +1606,24 @@
       if (success) {
         document.getElementById('pulseIndicator').style.background = '#16a34a';
         document.getElementById('statusText').innerText = '✅ Generation Complete!';
-        updateProgress(100, '✅ Complete', 'Verification report generation finished successfully!');
+        updateProgress(100, 100, '✅ Generation Complete');
       } else {
         document.getElementById('pulseIndicator').style.background = '#dc2626';
-        const fill = document.getElementById('progressFill');
-        if (fill) fill.style.background = '#dc2626';
-        const stageEl = document.getElementById('progressStage');
-        const detailEl = document.getElementById('progressDetail');
+        const totalFill = document.getElementById('progressTotalFill');
+        if (totalFill) totalFill.style.background = '#dc2626';
+        const stageFill = document.getElementById('progressStageFill');
+        if (stageFill) stageFill.style.background = '#dc2626';
+        const stageTitleEl = document.getElementById('progressStageTitle');
         if (message && message.toLowerCase().includes('stop')) {
           document.getElementById('statusText').innerText = '⏹ Pipeline Stopped by user.';
-          if (stageEl) stageEl.innerText = '⏹ Stopped';
-          if (detailEl) detailEl.innerText = 'Pipeline stopped by user.';
+          if (stageTitleEl) stageTitleEl.innerText = '⏹ Stopped by user';
         } else {
           document.getElementById('statusText').innerText = '❌ Execution Error. Check log console.';
-          if (stageEl) stageEl.innerText = '❌ Failed';
-          if (detailEl) detailEl.innerText = 'Execution stopped due to error. Check logs below.';
+          if (stageTitleEl) stageTitleEl.innerText = '❌ Execution Failed';
         }
       }
     }
+
 
     function clearLogs() {
       document.getElementById('terminal').innerText = '';
