@@ -1,0 +1,11 @@
+# Ignore personal local binaries and logs
+agy
+go
+gofmt
+mac-active*
+*.bak*
+*.sock
+*.pid
+*.log
+.DS_Store
+__pycache__/

@@ -1,0 +1,1246 @@
+#!/usr/bin/env python3
+"""
+hpc-run: Multi-cluster persistent SSH execution tool for NOAA & HPC clusters.
+Supports: Gaea (C5, C6, C7 direct head nodes), Hera, Ursa, Orion, Hercules.
+Provides interactive PIN + YubiKey authentication on first launch,
+then maintains a persistent background session for 0.1s instant command execution.
+
+Features:
+- Direct, independent connections to Gaea C5, C6, and C7 (no hopping through C5).
+- Concurrent multi-threaded socket server (control plane never blocks).
+- 120s inactivity / idle timeout with automatic SIGINT (Ctrl+C) recovery.
+- Instant non-blocking health and status checks (__PING__, __STATUS__).
+- Client-side SIGINT forwarding (__CANCEL__) to immediately abort remote execution.
+- Asynchronous execution support (--async) for long-running batch jobs.
+- Automatic headless session initialization when SSH ControlMaster is active.
+"""
+
+import sys
+import os
+import pty
+import time
+import select
+import socket
+import threading
+import signal
+import re
+import uuid
+import termios
+import tty
+import shlex
+import glob
+
+CLUSTERS = {
+    "gaea-c5": {
+        "ssh_host": "Gaeac5",
+        "canonical_host": "gaea-c5.fairmont.rdhpcs.noaa.gov",
+        "alias_candidates": ["Gaeac5", "gaea-c5", "gaeac5", "c5", "Gaea", "gaea"],
+        "description": "NOAA RDHPCS Gaea C5 (gaea51~56, /gpfs/f5)",
+        "timeout_init": 60,
+        "prompt_regex": re.compile(rb'([a-zA-Z0-9_\.\-]+@gaea\d+:.*?>|gaea\d+:.*?>|\[[a-zA-Z0-9_\.\-]+@gaea\d+.*?\][$#>]|:~>)'),
+    },
+    "gaea-c6": {
+        "ssh_host": "Gaeac6",
+        "canonical_host": "gaea-c6.fairmont.rdhpcs.noaa.gov",
+        "alias_candidates": ["Gaeac6", "gaea-c6", "gaeac6", "c6"],
+        "description": "NOAA RDHPCS Gaea C6 (gaea61~66, /gpfs/f6)",
+        "timeout_init": 60,
+        "prompt_regex": re.compile(rb'([a-zA-Z0-9_\.\-]+@gaea\d+:.*?>|gaea\d+:.*?>|\[[a-zA-Z0-9_\.\-]+@gaea\d+.*?\][$#>]|:~>)'),
+    },
+    "gaea-c7": {
+        "ssh_host": "Gaeac7",
+        "canonical_host": "gaea-c7.fairmont.rdhpcs.noaa.gov",
+        "alias_candidates": ["Gaeac7", "gaea-c7", "gaeac7", "c7"],
+        "description": "NOAA RDHPCS Gaea C7 (gaea71~76, /gpfs/f7)",
+        "timeout_init": 90,
+        "prompt_regex": re.compile(rb'([a-zA-Z0-9_\.\-]+@gaea\d+:.*?>|gaea\d+:.*?>|\[[a-zA-Z0-9_\.\-]+@gaea\d+.*?\][$#>]|:~>)'),
+    },
+    "hera": {
+        "ssh_host": "Hera",
+        "canonical_host": "hera-mfa.fairmont.rdhpcs.noaa.gov",
+        "alias_candidates": ["Hera", "hera"],
+        "description": "NOAA RDHPCS Hera",
+        "timeout_init": 50,
+        "prompt_regex": re.compile(rb'([a-zA-Z0-9_\.\-]+@hfe\d+|hfe\d+:[^$#]*[$#]|\[[a-zA-Z0-9_\.\-]+@hfe\d+.*?\][$#>]|:~>)'),
+    },
+    "ursa": {
+        "ssh_host": "Ursa",
+        "canonical_host": "ursa-mfa.fairmont.rdhpcs.noaa.gov",
+        "alias_candidates": ["Ursa", "ursa"],
+        "description": "NOAA RDHPCS Ursa",
+        "timeout_init": 50,
+        "prompt_regex": re.compile(rb'([a-zA-Z0-9_\.\-]+@ufe\d+|ufe\d+:[^$#]*[$#]|\[[a-zA-Z0-9_\.\-]+@ufe\d+.*?\][$#>]|:~>)'),
+    },
+    "orion": {
+        "ssh_host": "Orion",
+        "canonical_host": "orion-login.hpc.msstate.edu",
+        "alias_candidates": ["Orion", "orion"],
+        "description": "MSU Orion",
+        "timeout_init": 35,
+        "prompt_regex": re.compile(rb'([a-zA-Z0-9_\.\-]+@Orion|orion-login|\[[a-zA-Z0-9_\.\-]+@Orion.*?\][$#>]|:~>)'),
+    },
+    "hercules": {
+        "ssh_host": "Hercules",
+        "canonical_host": "hercules-login.hpc.msstate.edu",
+        "alias_candidates": ["Hercules", "hercules"],
+        "description": "MSU Hercules",
+        "timeout_init": 35,
+        "prompt_regex": re.compile(rb'([a-zA-Z0-9_\.\-]+@hercules|hercules-login|\[[a-zA-Z0-9_\.\-]+@hercules.*?\][$#>]|:~>)'),
+    }
+}
+
+GAEA_CLUSTERS = ("gaea-c5", "gaea-c6", "gaea-c7")
+
+CLUSTER_ALIASES = {
+    "c5": "gaea-c5",
+    "c6": "gaea-c6",
+    "c7": "gaea-c7",
+    "gaeac5": "gaea-c5",
+    "gaeac6": "gaea-c6",
+    "gaeac7": "gaea-c7",
+    "gaea-c5": "gaea-c5",
+    "gaea-c6": "gaea-c6",
+    "gaea-c7": "gaea-c7",
+    "hera": "hera",
+    "ursa": "ursa",
+    "orion": "orion",
+    "hercules": "hercules",
+}
+
+def resolve_ssh_host(cluster):
+    """
+    Auto-detect configured SSH host alias from ~/.ssh/config, or fall back to canonical FQDN.
+    Allows any user on any machine to use hpc-run out-of-the-box without modifying code or config.
+    """
+    cfg = CLUSTERS.get(cluster, {})
+    candidates = cfg.get("alias_candidates", [cfg.get("ssh_host", cluster)])
+    ssh_config_file = os.path.expanduser("~/.ssh/config")
+    if os.path.exists(ssh_config_file):
+        try:
+            with open(ssh_config_file, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.lower().startswith("host ") and not line.startswith("#"):
+                        configured_hosts = [h.strip() for h in line[5:].split() if h.strip() and not h.startswith("*")]
+                        for cand in candidates:
+                            for ch in configured_hosts:
+                                if ch.lower() == cand.lower():
+                                    return ch
+        except Exception:
+            pass
+    return cfg.get("canonical_host", cfg.get("ssh_host", cluster))
+
+def resolve_ssh_user(cluster):
+    """
+    Resolves the SSH username for the target cluster:
+    1. Environment variable HPC_<CLUSTER>_USER or HPC_USER.
+    2. Cached user file ~/.hpc_user_<cluster> or ~/.hpc_user.
+    3. User directive configured in ~/.ssh/config for this host.
+    4. None (caller may prompt or fall back).
+    """
+    cluster_env = cluster.upper().replace('-', '_')
+    user = os.environ.get(f"HPC_{cluster_env}_USER") or os.environ.get("HPC_USER")
+    if user and user.strip():
+        return user.strip()
+
+    for p in [os.path.expanduser(f"~/.hpc_user_{cluster}"), os.path.expanduser("~/.hpc_user")]:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    u = f.read().strip()
+                    if u:
+                        return u
+            except Exception:
+                pass
+
+    cfg = CLUSTERS.get(cluster, {})
+    candidates = cfg.get("alias_candidates", [cfg.get("ssh_host", cluster)])
+    ssh_config_file = os.path.expanduser("~/.ssh/config")
+    if os.path.exists(ssh_config_file):
+        try:
+            with open(ssh_config_file, "r", encoding="utf-8", errors="ignore") as f:
+                current_match = False
+                for line in f:
+                    line = line.strip()
+                    if line.lower().startswith("host ") and not line.startswith("#"):
+                        hosts = [h.strip() for h in line[5:].split() if h.strip() and not h.startswith("*")]
+                        current_match = any(c.lower() in [h.lower() for h in hosts] for c in candidates)
+                    elif current_match and line.lower().startswith("user ") and not line.startswith("#"):
+                        return line[5:].strip()
+        except Exception:
+            pass
+
+    return None
+
+def get_ssh_cmd(cluster):
+    """
+    Build SSH command line ensuring ControlMaster multiplexing and sockets directory.
+    Zero-install: automatically initializes ~/.ssh/sockets with 0700 permissions.
+    """
+    target_host = resolve_ssh_host(cluster)
+    sock_dir = os.path.expanduser("~/.ssh/sockets")
+    if not os.path.exists(sock_dir):
+        try:
+            os.makedirs(sock_dir, mode=0o700, exist_ok=True)
+        except Exception:
+            pass
+
+    cmd = [
+        'ssh',
+        '-tt',
+        '-o', 'ClearAllForwardings=yes',
+        '-o', 'ControlMaster=auto',
+        '-o', 'ControlPath=~/.ssh/sockets/%r@%h-%p',
+        '-o', 'ControlPersist=72h',
+        '-o', 'ServerAliveInterval=60',
+        '-o', 'ServerAliveCountMax=3',
+        '-o', 'TCPKeepAlive=yes'
+    ]
+
+    # Explicit username resolution to prevent defaulting to local machine user
+    user = resolve_ssh_user(cluster)
+    if user:
+        cmd.extend(['-l', user])
+
+    cmd.append(target_host)
+    return cmd
+
+def resolve_default_gaea_cluster():
+    """
+    Resolve default Gaea sub-cluster for generic 'gaea' or 'gaea-run':
+    1. If HPC_GAEA_DEFAULT env var is set (e.g. 'c6', 'c7', 'gaea-c5'), use it.
+    2. Check which Gaea daemons are currently ONLINE:
+       - If gaea-c5 is online, use gaea-c5.
+       - If gaea-c6 is online, use gaea-c6.
+       - If gaea-c7 is online, use gaea-c7.
+    3. Check active OpenSSH ControlMaster sockets in ~/.ssh/sockets/:
+       - If gaea-c5 socket active, use gaea-c5.
+       - If gaea-c6 socket active, use gaea-c6.
+       - If gaea-c7 socket active, use gaea-c7.
+    4. Otherwise, default to 'gaea-c5'.
+    """
+    pref = os.environ.get("HPC_GAEA_DEFAULT", "").lower().strip()
+    if pref in CLUSTER_ALIASES:
+        return CLUSTER_ALIASES[pref]
+
+    # Check live daemons
+    for c in GAEA_CLUSTERS:
+        online, _ = check_status(c)
+        if online:
+            return c
+
+    # Check active ControlMaster sockets in ~/.ssh/sockets/
+    for c in GAEA_CLUSTERS:
+        sock_pat = os.path.expanduser(f"~/.ssh/sockets/*{c}*")
+        if glob.glob(sock_pat):
+            return c
+
+    return "gaea-c5"
+
+def route_gaea_command(cluster, cmd, target_node=None):
+    """
+    Format command for direct execution on target Gaea cluster.
+    If a specific node within that cluster is requested (e.g. gaea62 on gaea-c6),
+    executes directly if already on that node or internal ssh to that node.
+    No cross-cluster forwarding through C5!
+    """
+    if target_node:
+        node = target_node.strip()
+        return (
+            f'if [[ "$(hostname)" == "{node}"* ]]; then '
+            f'({cmd}); '
+            f'else '
+            f'ssh -q {node} {shlex.quote(cmd)}; '
+            f'fi'
+        )
+
+    if cluster == "gaea-c7":
+        # On C7, ensure /gpfs/f7 is accessible; if current node has it unmounted, hop to healthy C7 node
+        return (
+            f'if timeout 2 test -d /gpfs/f7 2>/dev/null; then '
+            f'({cmd}); '
+            f'else '
+            f'for _n in gaea74 gaea73 gaea75 gaea72 gaea71 gaea76; do '
+            f'if ssh -q -o ConnectTimeout=2 $_n "timeout 2 test -d /gpfs/f7" 2>/dev/null; then '
+            f'ssh -q $_n {shlex.quote(cmd)}; '
+            f'break; '
+            f'fi; '
+            f'done; '
+            f'fi'
+        )
+
+    return cmd
+
+GENERIC_PROMPT_REGEX = re.compile(rb'([a-zA-Z0-9_\.\-]+@[a-zA-Z0-9_\.\-]+[:\s][^$#>]*[$#>]\s*$|:~[>#]\s*$|\[[a-zA-Z0-9_\.\-]+@.+?\]\s*[$#>]\s*$)')
+
+def get_paths(cluster):
+    sock = os.path.expanduser(f"~/.ssh/hpc_{cluster}.sock")
+    pid_f = os.path.expanduser(f"~/.ssh/hpc_{cluster}.pid")
+    log_f = os.path.expanduser(f"~/.ssh/hpc_{cluster}.log")
+    return sock, pid_f, log_f
+
+class HPCDaemon:
+    def __init__(self, cluster, master_fd=None, child_pid=None):
+        self.cluster = cluster
+        self.cfg = CLUSTERS[cluster]
+        self.sock_path, self.pid_path, self.log_path = get_paths(cluster)
+        self.master = master_fd
+        self.slave = None
+        self.proc_pid = child_pid
+        self.running = True
+        self.log_fp = None
+        self.detected_node = None
+
+        # Concurrency & execution state controls
+        self.cmd_lock = threading.Lock()
+        self.current_cmd = None
+        self.current_cmd_start = 0.0
+        self.abort_requested = False
+
+    def log(self, msg):
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{ts}] [{self.cluster.upper()}] {msg}\n"
+        if self.log_fp:
+            try:
+                self.log_fp.write(line)
+                self.log_fp.flush()
+            except Exception:
+                pass
+
+    def start_ssh_session_headless(self):
+        ssh_cmd = get_ssh_cmd(self.cluster)
+        target_display = ssh_cmd[-1]
+        timeout_init = self.cfg["timeout_init"]
+        prompt_re = self.cfg["prompt_regex"]
+
+        self.log(f"Starting ssh session to {target_display} (headless)...")
+        self.master, self.slave = pty.openpty()
+        self.proc_pid = os.fork()
+        if self.proc_pid == 0:
+            os.close(self.master)
+            os.dup2(self.slave, 0)
+            os.dup2(self.slave, 1)
+            os.dup2(self.slave, 2)
+            os.close(self.slave)
+            os.execvp('ssh', ssh_cmd)
+
+        os.close(self.slave)
+
+        buf = b''
+        start_time = time.time()
+        ansi_cleaner = re.compile(r'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])|\x1b\][^\x07\x1b]*[\x07\x1b\\]')
+        self.log(f"Waiting for prompt from {target_display} (max {timeout_init}s)...")
+        while time.time() - start_time < timeout_init:
+            r, _, _ = select.select([self.master], [], [], 1.0)
+            if self.master in r:
+                try:
+                    chunk = os.read(self.master, 4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    clean_text = ansi_cleaner.sub('', buf.decode('utf-8', errors='ignore'))
+                    if prompt_re.search(buf) or prompt_re.search(clean_text.encode('utf-8')) or GENERIC_PROMPT_REGEX.search(buf):
+                        time.sleep(1)
+                        self.log(f"Prompt detected! Connection to {self.cluster.upper()} ready.")
+                        return True
+                except OSError:
+                    break
+        self.log(f"Timed out waiting for prompt. Buffer was:\n{buf.decode('utf-8', errors='replace')}")
+        if self.proc_pid:
+            try:
+                os.kill(self.proc_pid, signal.SIGTERM)
+            except Exception:
+                pass
+        return False
+
+    def send_sigint_and_drain(self):
+        """Send SIGINT (Ctrl+C) to the master PTY and drain leftover output."""
+        try:
+            os.write(self.master, b'\x03\n')
+            time.sleep(0.3)
+            # Drain any trailing output until shell prompt is restored
+            for _ in range(10):
+                r, _, _ = select.select([self.master], [], [], 0.1)
+                if self.master in r:
+                    chunk = os.read(self.master, 4096)
+                    if not chunk:
+                        break
+                else:
+                    break
+        except Exception as e:
+            self.log(f"Error while sending SIGINT drain: {e}")
+
+    def abort_current_command(self):
+        """Abort currently running command if any."""
+        if self.cmd_lock.locked():
+            self.abort_requested = True
+            try:
+                os.write(self.master, b'\x03')
+            except Exception:
+                pass
+            return True
+        return False
+
+    def exec_command(self, cmd, idle_timeout=120):
+        """
+        Execute command on remote shell via master PTY.
+        Uses inactivity / idle timeout: if no I/O is observed for idle_timeout seconds,
+        it sends SIGINT (Ctrl+C) to interrupt the hanging command and restores prompt.
+        """
+        with self.cmd_lock:
+            self.current_cmd = cmd
+            self.current_cmd_start = time.time()
+            self.abort_requested = False
+
+            # Drain any stale pending output from previous execution
+            while True:
+                r, _, _ = select.select([self.master], [], [], 0.05)
+                if self.master in r:
+                    try:
+                        chunk = os.read(self.master, 4096)
+                        if not chunk:
+                            break
+                    except OSError:
+                        break
+                else:
+                    break
+
+            req_id = uuid.uuid4().hex[:8]
+            start_marker = f"__HPC_START_{req_id}__"
+            end_marker = f"__HPC_END_{req_id}__"
+
+            full_cmd = f"echo __HPC_START_\"\"{req_id}__; ({cmd}); echo __HPC_END_\"\"{req_id}__ $?\n"
+            try:
+                os.write(self.master, full_cmd.encode('utf-8'))
+            except OSError as e:
+                self.current_cmd = None
+                self.log(f"PTY write error on {self.cluster}: {e}. Session disconnected.")
+                self.running = False
+                try:
+                    if os.path.exists(self.sock_path):
+                        os.remove(self.sock_path)
+                except Exception:
+                    pass
+                return 1, f"Remote session on {self.cluster} disconnected ({e}). Please run 'hpc-run --start {self.cluster}' to reconnect."
+
+            raw = b''
+            last_io_time = time.time()
+            start_found = False
+            exit_code = 0
+
+            while True:
+                # Check for explicit cancellation request
+                if self.abort_requested:
+                    self.log(f"Command aborted via cancellation request: {cmd[:80]}")
+                    self.send_sigint_and_drain()
+                    self.current_cmd = None
+                    self.abort_requested = False
+                    return 130, f"Command aborted by user on {self.cluster}."
+
+                # Check for inactivity / idle timeout
+                now = time.time()
+                if now - last_io_time > idle_timeout:
+                    self.log(f"Command timed out due to no I/O for {idle_timeout}s: {cmd[:80]}")
+                    self.send_sigint_and_drain()
+                    self.current_cmd = None
+                    return 124, f"Command execution timed out: no output activity for {idle_timeout}s on {self.cluster}."
+
+                r, _, _ = select.select([self.master], [], [], 0.2)
+                if self.master in r:
+                    try:
+                        chunk = os.read(self.master, 65536)
+                        if not chunk:
+                            break
+                        raw += chunk
+                        last_io_time = time.time()  # Reset idle timer on every incoming byte chunk
+
+                        if not start_found and (start_marker.encode() + b'\r\n' in raw or start_marker.encode() + b'\n' in raw or start_marker.encode() in raw):
+                            start_found = True
+
+                        if start_found and end_marker.encode() in raw:
+                            time.sleep(0.05)
+                            r2, _, _ = select.select([self.master], [], [], 0.1)
+                            if self.master in r2:
+                                raw += os.read(self.master, 1024)
+                            break
+                    except OSError:
+                        break
+
+            self.current_cmd = None
+            text = raw.decode('utf-8', errors='replace')
+            s_idx = text.find(start_marker)
+            e_idx = text.find(end_marker, s_idx) if s_idx != -1 else -1
+
+            if s_idx == -1 or e_idx == -1:
+                # Expected boundary markers missing; clean up remote terminal
+                self.send_sigint_and_drain()
+                return 1, f"Command execution completed without expected markers on {self.cluster}.\nRaw:\n{text}"
+
+            raw_content = text[s_idx + len(start_marker) : e_idx]
+            if raw_content.startswith('\r\n'):
+                raw_content = raw_content[2:]
+            elif raw_content.startswith('\n'):
+                raw_content = raw_content[1:]
+
+            after_end = text[e_idx + len(end_marker):].strip()
+            code_match = re.search(r'^(\d+)', after_end)
+            if code_match:
+                exit_code = int(code_match.group(1))
+
+            clean_out = raw_content.replace('\r\n', '\n')
+            return exit_code, clean_out
+
+    def exec_async_command(self, cmd):
+        """Execute command asynchronously on remote host and return immediately."""
+        task_id = uuid.uuid4().hex[:6]
+        log_file = f"/tmp/hpc_async_{self.cluster}_{task_id}.log"
+        wrapped_cmd = f"nohup bash -c {shlex.quote(cmd)} > {log_file} 2>&1 & echo $!"
+        code, out = self.exec_command(wrapped_cmd, idle_timeout=15)
+        if code == 0:
+            pid = out.strip().splitlines()[-1] if out.strip() else "unknown"
+            info = (
+                f"[{self.cluster.upper()}] Asynchronous job launched in background.\n"
+                f"  PID:          {pid}\n"
+                f"  Log File:     {log_file}\n"
+                f"  Check Status: {self.cluster}-run \"ps -p {pid} -o pid,state,time,command\"\n"
+                f"  View Output:  {self.cluster}-run \"tail -n 50 {log_file}\"\n"
+            )
+            return 0, info
+        else:
+            return code, f"Failed to launch asynchronous command on {self.cluster}:\n{out}"
+
+    def handle_client(self, conn):
+        """Handle individual client connection in a separate worker thread."""
+        try:
+            data = b''
+            while True:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+                if b'\n' in data:
+                    break
+
+            req = data.decode('utf-8').strip()
+            if not req:
+                return
+
+            # Non-blocking control plane commands
+            if req == "__PING__":
+                if self.cmd_lock.locked():
+                    elapsed = int(time.time() - self.current_cmd_start)
+                    cmd_summary = (self.current_cmd or "")[:40]
+                    conn.sendall(f"PONG BUSY ({elapsed}s: {cmd_summary})\n".encode('utf-8'))
+                else:
+                    conn.sendall(b"PONG IDLE\n")
+
+            elif req == "__STATUS__":
+                node_info = ""
+                if self.cluster in GAEA_CLUSTERS or self.cluster.startswith("gaea"):
+                    if not getattr(self, "detected_node", None) and not self.cmd_lock.locked():
+                        try:
+                            code, out = self.exec_command("hostname", idle_timeout=3)
+                            if code == 0 and out.strip():
+                                self.detected_node = out.strip().splitlines()[-1]
+                        except Exception:
+                            pass
+                    if getattr(self, "detected_node", None):
+                        node_info = f" [node: {self.detected_node}]"
+
+                if self.cmd_lock.locked():
+                    elapsed = int(time.time() - self.current_cmd_start)
+                    cmd_summary = (self.current_cmd or "")[:50]
+                    conn.sendall(f"ONLINE (BUSY: {cmd_summary} [{elapsed}s]{node_info})\n".encode('utf-8'))
+                else:
+                    conn.sendall(f"ONLINE (IDLE{node_info})\n".encode('utf-8'))
+
+            elif req == "__CANCEL__":
+                aborted = self.abort_current_command()
+                if aborted:
+                    conn.sendall(b"CANCEL_SIGNAL_SENT\n")
+                else:
+                    conn.sendall(b"NO_COMMAND_RUNNING\n")
+
+            elif req == "__STOP__":
+                conn.sendall(b"STOPPING\n")
+                self.running = False
+
+            elif req.startswith("__ASYNC__ "):
+                real_cmd = req[len("__ASYNC__ "):]
+                self.log(f"Executing ASYNC: {real_cmd[:100]}")
+                code, out = self.exec_async_command(real_cmd)
+                resp = f"{code}\n{out}"
+                conn.sendall(resp.encode('utf-8'))
+
+            else:
+                # Regular foreground execution command
+                self.log(f"Executing: {req[:100]}")
+                t0 = time.time()
+                code, out = self.exec_command(req, idle_timeout=600)
+                t_diff = time.time() - t0
+                self.log(f"Done in {t_diff:.2f}s (code={code})")
+                resp = f"{code}\n{out}"
+                conn.sendall(resp.encode('utf-8'))
+
+            # Record detected node if hostname changed or updated
+            if self.cluster in GAEA_CLUSTERS and not self.cmd_lock.locked():
+                try:
+                    code_h, out_h = self.exec_command("hostname", idle_timeout=2)
+                    if code_h == 0 and out_h.strip():
+                        self.detected_node = out_h.strip().splitlines()[-1]
+                except Exception:
+                    pass
+
+        except Exception as e:
+            self.log(f"Client handler exception: {e}")
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def run_server(self):
+        """Run multi-threaded Unix domain socket server."""
+        if os.path.exists(self.sock_path):
+            os.remove(self.sock_path)
+
+        self.log_fp = open(self.log_path, "a")
+        self.log(f"Daemon starting for {self.cluster} (PID={os.getpid()})...")
+
+        with open(self.pid_path, "w") as f:
+            f.write(str(os.getpid()))
+
+        # If master is not already initialized, start headless
+        if not self.master:
+            if not self.start_ssh_session_headless():
+                self.log(f"Failed to initialize session for {self.cluster}. Exiting.")
+                self.cleanup()
+                return
+
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(self.sock_path)
+        server.listen(20)
+        server.settimeout(1.0)
+        self.log(f"Listening on socket: {self.sock_path}")
+
+        while self.running:
+            try:
+                conn, _ = server.accept()
+            except socket.timeout:
+                if self.proc_pid:
+                    try:
+                        os.kill(self.proc_pid, 0)
+                    except OSError:
+                        self.log("Child SSH process exited. Attempting headless restart...")
+                        self.proc_pid = None
+                        if not self.start_ssh_session_headless():
+                            self.log("Headless restart failed. Exiting daemon cleanly.")
+                            self.running = False
+                            break
+                continue
+            except Exception as e:
+                self.log(f"Accept error: {e}")
+                time.sleep(0.5)
+                continue
+
+            # Dispatch each client request to a dedicated thread
+            client_thread = threading.Thread(target=self.handle_client, args=(conn,), daemon=True)
+            client_thread.start()
+
+        self.cleanup()
+
+    def cleanup(self):
+        self.log("Stopping daemon and cleaning up resources...")
+        if self.master:
+            try:
+                os.write(self.master, b"exit\n")
+                time.sleep(0.5)
+                os.close(self.master)
+            except Exception:
+                pass
+        if os.path.exists(self.sock_path):
+            try:
+                os.remove(self.sock_path)
+            except Exception:
+                pass
+        if os.path.exists(self.pid_path):
+            try:
+                os.remove(self.pid_path)
+            except Exception:
+                pass
+        if self.log_fp:
+            try:
+                self.log_fp.close()
+            except Exception:
+                pass
+
+def client_send(cluster, cmd, timeout=None):
+    """
+    Send command to cluster daemon over Unix domain socket.
+    Installs SIGINT handler to forward cancellation requests (__CANCEL__)
+    to daemon if user interrupts execution.
+    """
+    sock_path, _, _ = get_paths(cluster)
+    if not os.path.exists(sock_path):
+        return None, f"Daemon for {cluster} is not running"
+
+    is_control = cmd in ("__PING__", "__STATUS__", "__CANCEL__", "__STOP__")
+    if timeout is None:
+        timeout = 2.5 if is_control else 130.0
+
+    s = None
+    old_sigint = None
+
+    def sigint_handler(signum, frame):
+        # Forward cancellation to daemon
+        try:
+            cancel_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            cancel_sock.settimeout(2.0)
+            cancel_sock.connect(sock_path)
+            cancel_sock.sendall(b"__CANCEL__\n")
+            cancel_sock.close()
+        except Exception:
+            pass
+        sys.stderr.write(f"\n[{cluster.upper()}] Execution cancelled by user (SIGINT forwarded to remote shell).\n")
+        sys.exit(130)
+
+    if not is_control and threading.current_thread() is threading.main_thread():
+        try:
+            old_sigint = signal.signal(signal.SIGINT, sigint_handler)
+        except Exception:
+            pass
+
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect(sock_path)
+        s.sendall((cmd + '\n').encode('utf-8'))
+
+        resp = b''
+        while True:
+            try:
+                # Reset timeout on each chunk so active output streams don't time out
+                s.settimeout(timeout)
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                resp += chunk
+            except socket.timeout:
+                if is_control:
+                    return None, f"Control request timed out ({timeout}s)"
+                return 124, f"Socket inactivity timeout ({timeout}s) while awaiting response from {cluster}."
+
+        text = resp.decode('utf-8', errors='replace')
+        first_nl = text.find('\n')
+        if first_nl != -1:
+            code_str = text[:first_nl]
+            out = text[first_nl + 1:]
+            try:
+                return int(code_str), out
+            except ValueError:
+                return 0, text
+        return 0, text
+
+    except Exception as e:
+        return None, str(e)
+
+    finally:
+        if s:
+            try:
+                s.close()
+            except Exception:
+                pass
+        if old_sigint is not None:
+            try:
+                signal.signal(signal.SIGINT, old_sigint)
+            except Exception:
+                pass
+
+def start_daemon_headless_background(cluster):
+    """Attempt headless background launch without interactive prompt."""
+    sock_path, pid_path, log_path = get_paths(cluster)
+    cfg = CLUSTERS[cluster]
+    timeout_init = cfg["timeout_init"]
+
+    pid = os.fork()
+    if pid == 0:
+        os.setsid()
+        devnull = os.open(os.devnull, os.O_RDWR)
+        os.dup2(devnull, 0)
+        os.dup2(devnull, 1)
+        os.dup2(devnull, 2)
+        os.close(devnull)
+        d_pid = os.fork()
+        if d_pid == 0:
+            daemon = HPCDaemon(cluster)
+            daemon.run_server()
+        os._exit(0)
+
+    # Poll for socket readiness
+    t0 = time.time()
+    while time.time() - t0 < timeout_init + 5:
+        if os.path.exists(sock_path):
+            code, resp = client_send(cluster, "__PING__", timeout=2.0)
+            if resp and "PONG" in resp:
+                return True
+        if os.path.exists(pid_path):
+            try:
+                with open(pid_path) as f:
+                    daemon_pid = int(f.read().strip())
+                os.kill(daemon_pid, 0)
+            except OSError:
+                return False
+        time.sleep(0.5)
+    return False
+
+def start_daemon_interactive(cluster):
+    sock_path, pid_path, log_path = get_paths(cluster)
+    if os.path.exists(pid_path):
+        try:
+            with open(pid_path) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 0)
+            print(f"[{cluster.upper()}] Daemon is already running (PID={pid}).")
+            return True
+        except OSError:
+            pass
+
+    cfg = CLUSTERS[cluster]
+    is_interactive = sys.stdin.isatty() and sys.stdout.isatty()
+
+    if not is_interactive:
+        print(f"[{cluster.upper()}] Error: Daemon is offline and requires interactive PIN/YubiKey verification.")
+        print(f"Please run 'hpc-run --start {cluster}' in an interactive terminal first.")
+        return False
+
+    cluster_env = cluster.upper().replace('-', '_')
+    user = resolve_ssh_user(cluster)
+    if is_interactive:
+        prompt_txt = f"Enter your HPC username for [{cluster.upper()}]"
+        if user:
+            prompt_txt += f" [{user}]"
+        prompt_txt += ": "
+        try:
+            val = input(prompt_txt).strip()
+            if val:
+                user = val
+            if user:
+                os.environ[f"HPC_{cluster_env}_USER"] = user
+                os.environ["HPC_USER"] = user
+                try:
+                    with open(os.path.expanduser(f"~/.hpc_user_{cluster}"), "w") as f:
+                        f.write(user + "\n")
+                    with open(os.path.expanduser("~/.hpc_user"), "w") as f:
+                        f.write(user + "\n")
+                except Exception:
+                    pass
+        except (KeyboardInterrupt, EOFError):
+            print("\nAborted.")
+            return False
+
+    ssh_cmd = get_ssh_cmd(cluster)
+    timeout_init = cfg["timeout_init"]
+    prompt_re = cfg["prompt_regex"]
+
+    print(f"\n========================================================")
+    print(f"  Starting persistent session for [{cluster.upper()}] ({cfg['description']})")
+    print(f"  Please enter your PIN and touch your YubiKey if prompted.")
+    print(f"========================================================\n")
+
+    child_pid, master_fd = pty.fork()
+    if child_pid == 0:
+        os.execvp('ssh', ssh_cmd)
+
+    try:
+        import fcntl
+        winsize = fcntl.ioctl(sys.stdin.fileno(), termios.TIOCGWINSZ, b'\0' * 8)
+        fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
+    except Exception:
+        pass
+
+    old_term = termios.tcgetattr(sys.stdin.fileno())
+    buf = b''
+    start_time = time.time()
+    authenticated = False
+    ansi_cleaner = re.compile(r'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])|\x1b\][^\x07\x1b]*[\x07\x1b\\]')
+    max_timeout = 120
+
+    try:
+        tty.setraw(sys.stdin.fileno())
+        while time.time() - start_time < max_timeout:
+            r, _, _ = select.select([master_fd, sys.stdin.fileno()], [], [], 0.02)
+            if master_fd in r:
+                try:
+                    chunk = os.read(master_fd, 4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    os.write(sys.stdout.fileno(), chunk)
+
+                    clean_text = ansi_cleaner.sub('', buf.decode('utf-8', errors='ignore'))
+
+                    if 'Last login:' in clean_text and time.time() - start_time > 30:
+                        start_time = time.time() - 30
+
+                    if prompt_re.search(buf) or GENERIC_PROMPT_REGEX.search(buf) or re.search(r'\[.+@.+\]\s*[$#]|[@:][\w\.\-]+[^\n\r]*[$#>]\s*$', clean_text):
+                        time.sleep(0.3)
+                        authenticated = True
+                        break
+                except OSError:
+                    break
+
+            if sys.stdin.fileno() in r:
+                try:
+                    user_input = os.read(sys.stdin.fileno(), 1024)
+                    if not user_input:
+                        break
+                    os.write(master_fd, user_input)
+                    start_time = time.time()
+                except OSError:
+                    break
+
+            wpid, status = os.waitpid(child_pid, os.WNOHANG)
+            if wpid != 0:
+                break
+    finally:
+        termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_term)
+
+    if not authenticated:
+        print(f"\n[{cluster.upper()}] Authentication failed or cancelled. Exiting.")
+        try:
+            os.kill(child_pid, signal.SIGTERM)
+        except Exception:
+            pass
+        os.close(master_fd)
+        return False
+
+    print(f"\n\n[{cluster.upper()}] >>> Prompt detected! Authentication successful! <<<")
+    print(f"[{cluster.upper()}] Daemonizing session into background...")
+
+    pid = os.fork()
+    if pid == 0:
+        os.setsid()
+        devnull = os.open(os.devnull, os.O_RDWR)
+        os.dup2(devnull, 0)
+        os.dup2(devnull, 1)
+        os.dup2(devnull, 2)
+        os.close(devnull)
+        d_pid = os.fork()
+        if d_pid == 0:
+            daemon = HPCDaemon(cluster, master_fd=master_fd, child_pid=child_pid)
+            daemon.run_server()
+        os._exit(0)
+
+    t0 = time.time()
+    while time.time() - t0 < 10:
+        if os.path.exists(sock_path):
+            code, resp = client_send(cluster, "__PING__", timeout=2.0)
+            if resp and "PONG" in resp:
+                print(f"[{cluster.upper()}] Session is now LIVE and READY in background!")
+                print(f"[{cluster.upper()}] Subsequent commands will run in 0.1s without PIN/YubiKey.\n")
+                return True
+        time.sleep(0.5)
+
+    print(f"[{cluster.upper()}] Warning: Socket server did not respond. Check {log_path}")
+    return False
+
+def ensure_daemon_running(cluster):
+    """Ensure cluster daemon is online, trying headless startup before interactive mode."""
+    code, resp = client_send(cluster, "__PING__", timeout=2.0)
+    if resp and "PONG" in resp:
+        return True
+
+    if os.environ.get("HPC_NON_INTERACTIVE") == "1" or not sys.stdin.isatty():
+        sys.stderr.write(f"[{cluster.upper()}] Cluster is offline and non-interactive mode is active. Run 'hpc-run --start {cluster}' to connect.\n")
+        return False
+
+    # Try headless launch first (succeeds automatically if SSH ControlMaster is active)
+    sys.stderr.write(f"[{cluster.upper()}] Starting background session...\n")
+    if start_daemon_headless_background(cluster):
+        sys.stderr.write(f"[{cluster.upper()}] Session started and ready!\n")
+        return True
+
+    # Fall back to interactive launch (PIN entry / YubiKey touch)
+    return start_daemon_interactive(cluster)
+
+def stop_daemon(cluster):
+    sock_path, pid_path, _ = get_paths(cluster)
+    if not os.path.exists(pid_path):
+        print(f"[{cluster.upper()}] Daemon is not running.")
+        return
+    try:
+        client_send(cluster, "__STOP__", timeout=2.0)
+        time.sleep(0.5)
+    except Exception:
+        pass
+    if os.path.exists(pid_path):
+        try:
+            with open(pid_path) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, signal.SIGTERM)
+            print(f"[{cluster.upper()}] Stopped daemon (PID={pid}).")
+        except Exception as e:
+            print(f"[{cluster.upper()}] Error stopping: {e}")
+
+def cancel_command(cluster):
+    sock_path, _, _ = get_paths(cluster)
+    if not os.path.exists(sock_path):
+        print(f"[{cluster.upper()}] Daemon is not running.")
+        return
+    code, resp = client_send(cluster, "__CANCEL__", timeout=2.0)
+    if resp and "CANCEL_SIGNAL_SENT" in resp:
+        print(f"[{cluster.upper()}] Successfully sent cancellation signal (SIGINT/Ctrl+C) to current command.")
+    elif resp and "NO_COMMAND_RUNNING" in resp:
+        print(f"[{cluster.upper()}] No command is currently running on this cluster.")
+    else:
+        print(f"[{cluster.upper()}] Cancel response: {resp}")
+
+def check_status(cluster):
+    sock_path, pid_path, _ = get_paths(cluster)
+    if not os.path.exists(sock_path):
+        return False, "OFFLINE"
+    code, resp = client_send(cluster, "__STATUS__", timeout=2.0)
+    if resp and "ONLINE" in resp:
+        return True, resp.strip()
+    return False, "OFFLINE"
+
+def print_help():
+    print("hpc-run: Multi-cluster persistent SSH execution tool for NOAA & HPC clusters")
+    print("\nSupported clusters:")
+    for c, info in CLUSTERS.items():
+        online, status = check_status(c)
+        mark = "●" if online else "○"
+        print(f"  {mark} {c:<10} - {info['description']} [{status}]")
+
+    print("\n  Gaea Independent Direct Head Sessions:")
+    print("    gaea-c5 (c5) - C5 Direct Gateway (gaea51~56, /gpfs/f5)")
+    print("    gaea-c6 (c6) - C6 Direct Gateway (gaea61~66, /gpfs/f6)")
+    print("    gaea-c7 (c7) - C7 Direct Gateway (gaea71~76, /gpfs/f7)")
+
+    print("\nUsage:")
+    print("  hpc-run <cluster> \"<command>\"         Execute command instantly (0.1s) on target cluster")
+    print("  hpc-run <cluster> --async \"<cmd>\"    Launch command in remote background and return immediately")
+    print("  <cluster>-run \"<command>\"             Alias usage (e.g. gaea-run '...', hera-run '...')")
+    print("  <cluster>-run --async \"<cmd>\"         Async alias usage (e.g. gaea-run --async 'python test.py')")
+    print("\nGaea Direct Execution Shortcuts:")
+    print("  gaea-c5-run \"<cmd>\" (or c5-run)       Direct execution on Gaea C5 (access /gpfs/f5)")
+    print("  gaea-c6-run \"<cmd>\" (or c6-run)       Direct execution on Gaea C6 (access /gpfs/f6)")
+    print("  gaea-c7-run \"<cmd>\" (or c7-run)       Direct execution on Gaea C7 (access /gpfs/f7)")
+    print("  gaea-run -5 \"<cmd>\" / --c5           Route to C5 directly")
+    print("  gaea-run -6 \"<cmd>\" / --c6           Route to C6 directly")
+    print("  gaea-run -7 \"<cmd>\" / --c7           Route to C7 directly")
+    print("  gaea-run --node <hostname> \"<cmd>\"   Target specific login node (auto-routes to matching C5/C6/C7)")
+    print("  gaea-run \"<cmd>\"                      Auto-routes to currently active Gaea session (or C5 default)")
+    print("\nManagement commands:")
+    print("  hpc-run --list                       List all supported clusters and live status")
+    print("  hpc-run --status [cluster|all]       Check daemon status (e.g. hpc-run --status gaea)")
+    print("  hpc-run --cancel [cluster]           Abort currently running command on cluster")
+    print("  hpc-run --start <cluster>            Interactively authenticate (PIN + YubiKey) and daemonize")
+    print("  hpc-run --stop <cluster|all>         Stop background session daemon")
+    print("\nExamples:")
+    print("  gaea-c6-run \"hostname\"                (Runs directly on C6 without jumping through C5)")
+    print("  gaea-c7-run \"df -h /gpfs/f7\"          (Runs directly on C7 without jumping through C5)")
+    print("  gaea-c5-run \"df -h /gpfs/f5\"          (Runs directly on C5)")
+    print("  gaea-run --node gaea62 \"hostname\"     (Auto-routes to C6, jumps to gaea62 within C6)")
+
+def main():
+    prog = os.path.basename(sys.argv[0])
+    
+    inferred_cluster = None
+    if prog.endswith("-run") and prog != "hpc-run":
+        name_part = prog[:-4].lower()
+        if name_part in CLUSTERS:
+            inferred_cluster = name_part
+        elif name_part in CLUSTER_ALIASES:
+            inferred_cluster = CLUSTER_ALIASES[name_part]
+        elif name_part == "gaea":
+            inferred_cluster = "gaea"
+
+    args = sys.argv[1:]
+    if not args and not inferred_cluster:
+        print_help()
+        sys.exit(0)
+
+    # Global flags
+    if args and args[0] in ["--help", "-h"]:
+        print_help()
+        sys.exit(0)
+
+    if args and args[0] == "--list":
+        print_help()
+        sys.exit(0)
+
+    if args and args[0] == "--status":
+        raw_target = args[1].lower() if len(args) > 1 else (inferred_cluster or "all")
+        if raw_target == "all":
+            for c, info in CLUSTERS.items():
+                _, status = check_status(c)
+                print(f"{c:<10}: {status}")
+        elif raw_target == "gaea":
+            for c in GAEA_CLUSTERS:
+                _, status = check_status(c)
+                print(f"{c:<10}: {status}")
+        else:
+            target = CLUSTER_ALIASES.get(raw_target, raw_target)
+            if target not in CLUSTERS:
+                print(f"Unknown cluster: {raw_target}. Available: {', '.join(list(CLUSTERS.keys()) + ['gaea'])}")
+                sys.exit(1)
+            _, status = check_status(target)
+            print(f"{target}: {status}")
+        sys.exit(0)
+
+    if args and args[0] == "--cancel":
+        raw_target = args[1].lower() if len(args) > 1 else inferred_cluster
+        if not raw_target or raw_target == "all":
+            print("Please specify a cluster to cancel (e.g. hpc-run --cancel gaea-c6)")
+            sys.exit(1)
+        if raw_target == "gaea":
+            for c in GAEA_CLUSTERS:
+                cancel_command(c)
+        else:
+            target = CLUSTER_ALIASES.get(raw_target, raw_target)
+            if target not in CLUSTERS:
+                print(f"Unknown cluster: {raw_target}. Available: {', '.join(list(CLUSTERS.keys()) + ['gaea'])}")
+                sys.exit(1)
+            cancel_command(target)
+        sys.exit(0)
+
+    if args and args[0] == "--start":
+        raw_target = args[1].lower() if len(args) > 1 else inferred_cluster
+        if not raw_target or raw_target == "all":
+            print("Please specify a cluster to start (e.g. hpc-run --start gaea-c6)")
+            print(f"Available: {', '.join(list(CLUSTERS.keys()) + ['gaea'])}")
+            sys.exit(1)
+        if raw_target == "gaea":
+            target = "gaea-c5"
+            print("[GAEA] Generic 'gaea' defaults to gaea-c5. (Use --start gaea-c6 or gaea-c7 for C6/C7).")
+        else:
+            target = CLUSTER_ALIASES.get(raw_target, raw_target)
+        if target not in CLUSTERS:
+            print(f"Unknown cluster: {raw_target}. Available: {', '.join(list(CLUSTERS.keys()) + ['gaea'])}")
+            sys.exit(1)
+        start_daemon_interactive(target)
+        sys.exit(0)
+
+    if args and args[0] == "--stop":
+        raw_target = args[1].lower() if len(args) > 1 else (inferred_cluster or "all")
+        if raw_target == "all":
+            for c in CLUSTERS:
+                stop_daemon(c)
+            if os.path.exists(os.path.expanduser("~/.ssh/hpc_gaea.pid")):
+                stop_daemon("gaea")
+        elif raw_target == "gaea":
+            for c in GAEA_CLUSTERS:
+                stop_daemon(c)
+            if os.path.exists(os.path.expanduser("~/.ssh/hpc_gaea.pid")):
+                stop_daemon("gaea")
+        else:
+            target = CLUSTER_ALIASES.get(raw_target, raw_target)
+            if target not in CLUSTERS:
+                print(f"Unknown cluster: {raw_target}. Available: {', '.join(list(CLUSTERS.keys()) + ['gaea'])}")
+                sys.exit(1)
+            stop_daemon(target)
+        sys.exit(0)
+
+    # Command execution
+    cluster = inferred_cluster
+    target_node = None
+    is_async = False
+
+    if not cluster:
+        cand = args[0].lower()
+        if cand in CLUSTERS:
+            cluster = cand
+            cmd_args = args[1:]
+        elif cand in CLUSTER_ALIASES:
+            cluster = CLUSTER_ALIASES[cand]
+            cmd_args = args[1:]
+        elif cand == "gaea":
+            cluster = "gaea"
+            cmd_args = args[1:]
+        else:
+            print(f"Error: Unknown cluster '{cand}'.")
+            all_options = list(CLUSTERS.keys()) + ["c5", "c6", "c7", "gaea"]
+            print(f"Available clusters/targets: {', '.join(all_options)}")
+            print("Run 'hpc-run --help' for usage.")
+            sys.exit(1)
+    else:
+        cmd_args = list(args)
+
+    # Parse Gaea-specific flags and --async from cmd_args
+    filtered_cmd_args = []
+    i = 0
+    while i < len(cmd_args):
+        arg = cmd_args[i]
+        if arg == "--async":
+            is_async = True
+            i += 1
+        elif (cluster == "gaea" or cluster in GAEA_CLUSTERS) and arg in ("--c5", "-5", "-c5"):
+            cluster = "gaea-c5"
+            i += 1
+        elif (cluster == "gaea" or cluster in GAEA_CLUSTERS) and arg in ("--c6", "-6", "-c6"):
+            cluster = "gaea-c6"
+            i += 1
+        elif (cluster == "gaea" or cluster in GAEA_CLUSTERS) and arg in ("--c7", "-7", "-c7"):
+            cluster = "gaea-c7"
+            i += 1
+        elif (cluster == "gaea" or cluster in GAEA_CLUSTERS) and arg in ("--node", "-n"):
+            if i + 1 < len(cmd_args):
+                target_node = cmd_args[i + 1]
+                i += 2
+            else:
+                print("Error: --node requires a hostname argument (e.g. --node gaea62)")
+                sys.exit(1)
+        elif (cluster == "gaea" or cluster in GAEA_CLUSTERS) and arg.startswith("--node="):
+            target_node = arg.split("=", 1)[1]
+            i += 1
+        else:
+            filtered_cmd_args.append(arg)
+            i += 1
+
+    # Auto-resolve target node to appropriate Gaea sub-cluster if specified
+    if target_node:
+        t_node = target_node.strip()
+        if t_node.startswith("gaea5"):
+            cluster = "gaea-c5"
+        elif t_node.startswith("gaea6"):
+            cluster = "gaea-c6"
+        elif t_node.startswith("gaea7"):
+            cluster = "gaea-c7"
+
+    # If cluster is still generic 'gaea', resolve to active or default Gaea cluster
+    if cluster == "gaea":
+        cluster = resolve_default_gaea_cluster()
+
+    if cluster in CLUSTER_ALIASES:
+        cluster = CLUSTER_ALIASES[cluster]
+
+    cmd = " ".join(filtered_cmd_args)
+    if not cmd.strip():
+        print(f"Error: No command specified for cluster '{cluster}'.")
+        sys.exit(1)
+
+    # Apply node or C7 routing if applicable
+    if cluster in GAEA_CLUSTERS:
+        cmd = route_gaea_command(cluster, cmd, target_node=target_node)
+
+    # Auto-start daemon if not running
+    ok = ensure_daemon_running(cluster)
+    if not ok:
+        sys.exit(1)
+
+    # Format wire request
+    wire_cmd = f"__ASYNC__ {cmd}" if is_async else cmd
+    code, out = client_send(cluster, wire_cmd)
+
+    if code is None:
+        print(f"Error communicating with {cluster}: {out}", file=sys.stderr)
+        sys.exit(1)
+
+    sys.stdout.write(out)
+    if not out.endswith('\n'):
+        sys.stdout.write('\n')
+    sys.exit(code)
+
+if __name__ == '__main__':
+    main()

@@ -322,6 +322,9 @@ def get_hpc_run_executable():
     if env_path and os.path.exists(env_path):
         return env_path
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_local = os.path.abspath(os.path.join(script_dir, "hpc-tools", "hpc-run"))
+    if os.path.exists(repo_local) and os.access(repo_local, os.X_OK):
+        return repo_local
     bundled = os.path.abspath(os.path.join(script_dir, "..", "Frameworks", "python", "bin", "hpc-run"))
     if os.path.exists(bundled):
         return bundled

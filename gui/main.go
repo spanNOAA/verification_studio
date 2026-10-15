@@ -435,8 +435,11 @@ func main() {
 				"HPC_NON_INTERACTIVE=1",
 				"PATH="+filepath.Dir(pythonExe)+":/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:"+os.Getenv("PATH"),
 			)
+			repoHpcRun := filepath.Clean(filepath.Join(filepath.Dir(scriptPath), "hpc-tools", "hpc-run"))
 			hpcRunPath := filepath.Clean(filepath.Join(filepath.Dir(pythonExe), "hpc-run"))
-			if _, err := os.Stat(hpcRunPath); err == nil {
+			if _, err := os.Stat(repoHpcRun); err == nil {
+				env = append(env, "HPC_RUN_BIN="+repoHpcRun)
+			} else if _, err := os.Stat(hpcRunPath); err == nil {
 				env = append(env, "HPC_RUN_BIN="+hpcRunPath)
 			}
 			if exe, err := os.Executable(); err == nil {
