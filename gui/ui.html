@@ -382,6 +382,15 @@
     }
     .btn-primary:hover:not(:disabled) { background: #15803d; }
     .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-danger {
+      background: #dc2626;
+      color: #ffffff;
+      font-size: 15px;
+      padding: 10px 20px;
+      box-shadow: 0 2px 4px rgba(220, 38, 38, 0.25);
+    }
+    .btn-danger:hover:not(:disabled) { background: #b91c1c; }
+    .btn-danger:disabled { background: #fca5a5; cursor: not-allowed; }
     .btn-secondary { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
     .btn-secondary:hover { background: #e2e8f0; color: #0f172a; }
     .btn-sm { padding: 3px 8px; font-size: 11.5px; }
@@ -808,6 +817,7 @@
               <button type="button" class="btn btn-secondary" onclick="openOutputDirectory()">📂 Open Folder</button>
               <button type="button" class="btn btn-secondary" onclick="openPPTFile()">📊 Open PPT</button>
               <button type="button" class="btn btn-secondary" onclick="openHTMLFile()">🌐 Open HTML</button>
+              <button type="button" class="btn btn-danger" id="btnStop" onclick="stopRun()" style="display: none;">⏹ Stop Pipeline</button>
               <button type="button" class="btn btn-primary" id="btnStart" onclick="startRun()">🚀 Start Automated Generation</button>
             </div>
           </div>
@@ -1402,6 +1412,12 @@
       const btn = document.getElementById('btnStart');
       btn.disabled = true;
       btn.innerText = '⏳ Running Pipeline...';
+      const btnStop = document.getElementById('btnStop');
+      if (btnStop) {
+        btnStop.disabled = false;
+        btnStop.style.display = 'inline-flex';
+        btnStop.innerText = '⏹ Stop Pipeline';
+      }
       document.getElementById('pulseIndicator').style.background = '#eab308';
       document.getElementById('statusText').innerText = 'Executing automated verification pipeline...';
 
@@ -1421,6 +1437,18 @@
       }
     }
 
+    function stopRun() {
+      const btnStop = document.getElementById('btnStop');
+      if (btnStop) {
+        btnStop.disabled = true;
+        btnStop.innerText = '⏳ Stopping...';
+      }
+      document.getElementById('statusText').innerText = 'Stopping pipeline...';
+      if (window.stopPipelineNative) {
+        window.stopPipelineNative();
+      }
+    }
+
     // Called from Go backend
     function appendLog(line) {
       const term = document.getElementById('terminal');
@@ -1435,12 +1463,21 @@
       const btn = document.getElementById('btnStart');
       btn.disabled = false;
       btn.innerText = '🚀 Start Automated Generation';
+      const btnStop = document.getElementById('btnStop');
+      if (btnStop) {
+        btnStop.disabled = true;
+        btnStop.style.display = 'none';
+      }
       if (success) {
         document.getElementById('pulseIndicator').style.background = '#16a34a';
         document.getElementById('statusText').innerText = '✅ Generation Complete!';
       } else {
         document.getElementById('pulseIndicator').style.background = '#dc2626';
-        document.getElementById('statusText').innerText = '❌ Execution Error. Check log console.';
+        if (message && message.toLowerCase().includes('stop')) {
+          document.getElementById('statusText').innerText = '⏹ Pipeline Stopped by user.';
+        } else {
+          document.getElementById('statusText').innerText = '❌ Execution Error. Check log console.';
+        }
       }
     }
 

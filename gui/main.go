@@ -36,6 +36,10 @@ type PipelineRequest struct {
 var (
 	allowedPathsLock sync.RWMutex
 	allowedPathsMap  = make(map[string]bool)
+
+	pipelineMutex      sync.Mutex
+	pipelineCmd        *exec.Cmd
+	isPipelineStopping bool
 )
 
 func allowOpenPath(p string) {
@@ -273,8 +277,21 @@ func main() {
 	w.SetTitle("NOAA GSL Verification Studio")
 	w.SetSize(1160, 800, webview.HintNone)
 
+	defer func() {
+		pipelineMutex.Lock()
+		if pipelineCmd != nil && pipelineCmd.Process != nil {
+			killCmdProcGroup(pipelineCmd)
+		}
+		pipelineMutex.Unlock()
+	}()
+
 	// Bind native helper methods
 	_ = w.Bind("quitApp", func() {
+		pipelineMutex.Lock()
+		if pipelineCmd != nil && pipelineCmd.Process != nil {
+			killCmdProcGroup(pipelineCmd)
+		}
+		pipelineMutex.Unlock()
 		w.Destroy()
 		os.Exit(0)
 	})
@@ -287,7 +304,37 @@ func main() {
 		openPath(p)
 	})
 
+	_ = w.Bind("stopPipelineNative", func() {
+		pipelineMutex.Lock()
+		cmd := pipelineCmd
+		if cmd != nil && cmd.Process != nil && !isPipelineStopping {
+			isPipelineStopping = true
+			pipelineMutex.Unlock()
+			b, _ := json.Marshal("\n[USER ACTION] ⏹ Stop request received. Terminating verification pipeline...\n")
+			w.Dispatch(func() {
+				w.Eval(fmt.Sprintf("appendLog(%s)", string(b)))
+			})
+			go func(c *exec.Cmd) {
+				killCmdProcGroup(c)
+			}(cmd)
+		} else {
+			pipelineMutex.Unlock()
+		}
+	})
+
 	_ = w.Bind("runPipelineNative", func(payloadJSON string) {
+		pipelineMutex.Lock()
+		if pipelineCmd != nil && pipelineCmd.Process != nil {
+			pipelineMutex.Unlock()
+			b, _ := json.Marshal("\n[WARNING] Verification pipeline is already running.\n")
+			w.Dispatch(func() {
+				w.Eval(fmt.Sprintf("appendLog(%s)", string(b)))
+			})
+			return
+		}
+		isPipelineStopping = false
+		pipelineMutex.Unlock()
+
 		var req PipelineRequest
 		if err := json.Unmarshal([]byte(payloadJSON), &req); err != nil {
 			b, _ := json.Marshal(fmt.Sprintf("\n[ERROR] Failed to parse input parameters: %v\n", err))
@@ -463,11 +510,16 @@ func main() {
 				return
 			}
 
+			prepareCmdProcGroup(cmd)
 			if err := cmd.Start(); err != nil {
 				sendOutput(fmt.Sprintf("\n[ERROR] Failed to start python process: %v\n", err))
 				w.Dispatch(func() { w.Eval("onPipelineFinished(false, 'Failed to start process')") })
 				return
 			}
+
+			pipelineMutex.Lock()
+			pipelineCmd = cmd
+			pipelineMutex.Unlock()
 
 			// Stream stdout and stderr concurrently
 			readStream := func(r io.Reader) {
@@ -487,7 +539,19 @@ func main() {
 			go readStream(stderr)
 
 			cmdErr := cmd.Wait()
-			if cmdErr != nil {
+
+			pipelineMutex.Lock()
+			wasStopped := isPipelineStopping
+			pipelineCmd = nil
+			isPipelineStopping = false
+			pipelineMutex.Unlock()
+
+			if wasStopped {
+				sendOutput(fmt.Sprintf("\n[STOPPED] ⏹ Verification pipeline was stopped by user.\n"))
+				w.Dispatch(func() {
+					w.Eval("onPipelineFinished(false, 'Pipeline stopped by user')")
+				})
+			} else if cmdErr != nil {
 				sendOutput(fmt.Sprintf("\n[ERROR] Execution interrupted or exited with error: %v\n", cmdErr))
 				w.Dispatch(func() {
 					w.Eval("onPipelineFinished(false, 'Execution error')")
