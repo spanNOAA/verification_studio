@@ -431,6 +431,21 @@
       font-weight: 800;
       color: #2563eb;
     }
+    .timer-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+      letter-spacing: 0.2px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      transition: all 0.25s ease;
+    }
     .progress-pct-stage {
       font-size: 12px;
       font-weight: 700;
@@ -898,7 +913,10 @@
             <!-- Row 1: Total Progress -->
             <div class="progress-header">
               <span class="progress-label-total">Total Progress</span>
-              <span id="progressTotalPct" class="progress-pct-total">0%</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="pipelineTimer" class="timer-badge">⏱️ 00:00</span>
+                <span id="progressTotalPct" class="progress-pct-total">0%</span>
+              </div>
             </div>
             <div class="progress-track" style="margin-bottom: 8px;">
               <div id="progressTotalFill" class="progress-bar-fill"></div>
@@ -1464,6 +1482,49 @@
       updateModelBadge();
     }, 50);
 
+    let pipelineStartTime = null;
+    let pipelineTimerInterval = null;
+
+    function formatDuration(totalSeconds) {
+      const s = Math.max(0, Math.floor(totalSeconds));
+      const m = Math.floor(s / 60);
+      const remS = s % 60;
+      const ss = String(remS).padStart(2, '0');
+      if (m >= 60) {
+        const h = Math.floor(m / 60);
+        const remM = m % 60;
+        return `${h}:${String(remM).padStart(2, '0')}:${ss}`;
+      }
+      return `${String(m).padStart(2, '0')}:${ss}`;
+    }
+
+    function startTimer() {
+      stopTimer();
+      pipelineStartTime = Date.now();
+      const timerEl = document.getElementById('pipelineTimer');
+      if (timerEl) {
+        timerEl.innerText = '⏱️ 00:00';
+        timerEl.style.color = '#2563eb';
+        timerEl.style.borderColor = '#bfdbfe';
+        timerEl.style.background = '#eff6ff';
+      }
+      pipelineTimerInterval = setInterval(() => {
+        if (!pipelineStartTime) return;
+        const elapsed = (Date.now() - pipelineStartTime) / 1000;
+        const el = document.getElementById('pipelineTimer');
+        if (el) {
+          el.innerText = `⏱️ ${formatDuration(elapsed)}`;
+        }
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (pipelineTimerInterval) {
+        clearInterval(pipelineTimerInterval);
+        pipelineTimerInterval = null;
+      }
+    }
+
     function updateProgress(totalPct, stagePct, stageTitle) {
       const totalFill = document.getElementById('progressTotalFill');
       const totalPctEl = document.getElementById('progressTotalPct');
@@ -1495,7 +1556,9 @@
     }
 
     async function startRun() {
+      startTimer();
       const rawTitle = document.getElementById('reportTitle').value.trim();
+
       const title = rawTitle || 'RRFSv2 Model Verification & Performance Evaluation';
       const outputDir = document.getElementById('outputDir').value.trim();
       const modelsText = document.getElementById('modelsText').value.trim();
@@ -1550,6 +1613,14 @@
     }
 
     function stopRun() {
+      stopTimer();
+      const timerEl = document.getElementById('pipelineTimer');
+      if (timerEl) {
+        timerEl.style.color = '#b91c1c';
+        timerEl.style.borderColor = '#fecaca';
+        timerEl.style.background = '#fef2f2';
+      }
+
       const btnStop = document.getElementById('btnStop');
       if (btnStop) {
         btnStop.disabled = true;
@@ -1595,6 +1666,7 @@
     }
 
     function onPipelineFinished(success, message) {
+      stopTimer();
       const btn = document.getElementById('btnStart');
       btn.disabled = false;
       btn.innerText = '🚀 Start Automated Generation';
@@ -1603,11 +1675,22 @@
         btnStop.disabled = true;
         btnStop.style.display = 'none';
       }
+      const timerEl = document.getElementById('pipelineTimer');
       if (success) {
+        if (timerEl) {
+          timerEl.style.color = '#15803d';
+          timerEl.style.borderColor = '#bbf7d0';
+          timerEl.style.background = '#f0fdf4';
+        }
         document.getElementById('pulseIndicator').style.background = '#16a34a';
         document.getElementById('statusText').innerText = '✅ Generation Complete!';
         updateProgress(100, 100, '✅ Generation Complete');
       } else {
+        if (timerEl) {
+          timerEl.style.color = '#b91c1c';
+          timerEl.style.borderColor = '#fecaca';
+          timerEl.style.background = '#fef2f2';
+        }
         document.getElementById('pulseIndicator').style.background = '#dc2626';
         const totalFill = document.getElementById('progressTotalFill');
         if (totalFill) totalFill.style.background = '#dc2626';
