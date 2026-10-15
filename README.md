@@ -1,5 +1,9 @@
 # NOAA GSL Verification Studio
 
+[![GitHub Release](https://img.shields.io/github/v/release/spanNOAA/verification_studio?color=blue&label=Latest%20Release)](https://github.com/spanNOAA/verification_studio/releases/latest)
+[![macOS Universal](https://img.shields.io/badge/Platform-macOS%20(Apple%20Silicon%20%2B%20Intel)-brightgreen.svg)](https://github.com/spanNOAA/verification_studio/releases/latest)
+[![Download DMG](https://img.shields.io/badge/Download-Verification__Studio__macOS__Universal.dmg-2563eb?logo=apple&logoColor=white)](https://github.com/spanNOAA/verification_studio/releases/download/v1.0.0/Verification_Studio_macOS_Universal.dmg)
+
 An end-to-end automated verification and presentation generation suite engineered for numerical weather prediction models. By supplying experiment model identifiers and verification date ranges, this tool **automatically evaluates NOAA GSL MATS statistical curves, retrieves remote HPC radar reflectivity graphics**, and **generates professional 23-slide PowerPoint presentations and 1:1 synchronized web presentations with a single click**.
 
 ---
