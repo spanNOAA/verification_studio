@@ -36,6 +36,10 @@ env.bak/
 venv.bak/
 
 # Go build outputs
+verification_studio
+verification_studio_arm64
+verification_studio_amd64
+gui/verification_studio
 mats_studio
 mats_studio_arm64
 mats_studio_amd64

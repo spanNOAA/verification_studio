@@ -165,7 +165,7 @@ func main() {
 
 	initMacMenu()
 
-	w.SetTitle("NOAA GSL MATS Verification Studio")
+	w.SetTitle("NOAA GSL Verification Studio")
 	w.SetSize(1160, 800, webview.HintNone)
 
 	// Bind native helper methods

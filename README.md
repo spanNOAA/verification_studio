@@ -1,6 +1,6 @@
-# NOAA GSL MATS Verification & Reporting Suite (mats_reporter)
+# NOAA GSL Verification Studio
 
-An end-to-end automated verification and presentation generation suite engineered for NOAA GSL MATS (Model Analysis and Tool Suite). By supplying experiment model identifiers and verification date ranges, this tool **automatically downloads pristine, high-resolution verification charts** and **generates professional 23-slide PowerPoint presentations and 1:1 synchronized web presentations with a single click**.
+An end-to-end automated verification and presentation generation suite engineered for numerical weather prediction models. By supplying experiment model identifiers and verification date ranges, this tool **automatically evaluates NOAA GSL MATS statistical curves, retrieves remote HPC radar reflectivity graphics**, and **generates professional 23-slide PowerPoint presentations and 1:1 synchronized web presentations with a single click**.
 
 ---
 
@@ -28,7 +28,7 @@ An end-to-end automated verification and presentation generation suite engineere
 
 4. **Universal Graceful Degradation**:
    - Availability pre-checks are executed before retrieval for every verification category.
-   - If a specific metric or model subset is unavailable in the MATS database, the engine automatically skips or plots available subsets with clean console `[NOTICE]` logs without crashing the pipeline.
+   - If a specific metric or model subset is unavailable in the database, the engine automatically skips or plots available subsets with clean console `[NOTICE]` logs without crashing the pipeline.
 
 5. **Synchronized Dual-Format Output (PowerPoint + 1:1 Interactive HTML)**:
    - Produces both an editable PPTX deck and a pixel-accurate interactive HTML presentation (`.html`) in the output directory.
@@ -45,17 +45,17 @@ An end-to-end automated verification and presentation generation suite engineere
 
 ## 2. Usage Instructions
 
-### Method 1: Compiled Native Desktop Application (MATS Studio.app — Recommended)
+### Method 1: Compiled Native Desktop Application (Verification Studio.app — Recommended)
 
 Built with Go and Cocoa WebKit, this lightweight standalone app provides modern UI controls and real-time streaming console logs:
 
 1. **How to Launch**:
    - **Double-click in Finder**:
-     - `MATS Studio.app` (Standard macOS Application bundle with icon)
+     - `Verification Studio.app` (Standard macOS Application bundle with icon)
    - **Or drag to `/Applications`** to pin to macOS Dock or Launchpad.
    - **Or launch via terminal**:
      ```bash
-     mats_reporter/mats_studio
+     mats_reporter/verification_studio
      ```
 2. **Workflow**:
    - **1. Report Title**: Enter or edit the presentation title (e.g., `May 6-13 2024 Retro Runs: Evaluation`).

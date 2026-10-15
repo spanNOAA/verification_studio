@@ -387,7 +387,7 @@ echo "$CURRENT_TTY" > "{tty_file}"
 printf "\\033]0;{window_title}\\007"
 
 echo "========================================================"
-echo " NOAA GSL MATS Verification Studio"
+echo " NOAA GSL Verification Studio"
 echo " HPC Authentication for [{target.upper()}]"
 echo "========================================================"
 echo ""
@@ -3346,7 +3346,7 @@ def build_html_report(config, mats_dir, output_html, slides_data):
   <!-- Top Navigation Bar -->
   <header class="toolbar">
     <div class="toolbar-left">
-      <span class="toolbar-title">⚡ NOAA MATS Report</span>
+      <span class="toolbar-title">⚡ NOAA Verification Report</span>
       __REGION_TABS__
       <select id="slideSelect" class="slide-select" onchange="goToSlide(parseInt(this.value))">
         __NAV_OPTIONS__
@@ -3584,7 +3584,7 @@ async def main_async(args):
     config["models"] = models
 
     print("=" * 60)
-    print(" NOAA GSL MATS Automated Verification & Presentation Tool")
+    print(" NOAA GSL Automated Verification & Presentation Tool")
     print("=" * 60)
     print(f" Output Directory : {out_dir}")
     print(f" PPTX Report      : {output_pptx}")
@@ -3641,7 +3641,7 @@ async def main_async(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="NOAA GSL MATS Automated Verification Tool & PPT/HTML Generator")
+    parser = argparse.ArgumentParser(description="NOAA GSL Automated Verification Tool & PPT/HTML Generator")
     parser.add_argument("--config", "-c", help="Path to YAML config file")
     parser.add_argument("--title", "-t", help="Title of the presentation report")
     parser.add_argument("--models", "-m", nargs="+", help="Models in format 'ID - cluster:path', 'name:ID', or 'ID'")

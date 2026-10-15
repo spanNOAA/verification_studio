@@ -1,4 +1,4 @@
-# NOAA GSL MATS Automated Verification & Presentation Generator Configuration
+# NOAA GSL Automated Verification & Presentation Generator Configuration
 title: "RRFSv2 Model Verification & Performance Evaluation"
 
 # Evaluated models list (id is the actual name on MATS, name is display alias, color is unique hex/rgb)

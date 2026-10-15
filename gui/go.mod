@@ -1,4 +1,4 @@
-module mats_studio
+module verification_studio
 
 go 1.23.2
 
