@@ -2737,7 +2737,8 @@ def build_presentation(config, mats_dir, output_pptx):
             "type": "radar_case",
             "title": f"Composite Reflectivity (dBZ) Comparison: {case_title}",
             "case_title": case_title,
-            "cards": cards
+            "cards": cards,
+            "region": "cases"
         })
 
     atomic_save_pptx(prs, output_pptx)
@@ -3015,7 +3016,7 @@ def build_html_report(config, mats_dir, output_html, slides_data):
             </div>
             '''
             
-        s_reg = slide.get("region", "all")
+        s_reg = "cases" if slide.get("type") == "radar_case" else slide.get("region", "all")
         slides_html.append(f'''
         <section class="slide-card {'active' if idx == 1 else ''}" id="slide-{idx}" data-slide-num="{idx}" data-region="{s_reg}">
           <div class="slide-watermark">Slide {idx} / {len(slides_data)}</div>
@@ -3034,7 +3035,6 @@ def build_html_report(config, mats_dir, output_html, slides_data):
             tabs_html.append('<button class="region-tab" data-filter="west" onclick="filterRegion(\'west\', this)">🏔️ Western Region</button>')
         if any(s.get("type") == "radar_case" for s in slides_data):
             tabs_html.append('<button class="region-tab" data-filter="cases" onclick="filterRegion(\'cases\', this)">📡 Radar Cases</button>')
-        tabs_html.append('<button class="region-tab" data-filter="everything" onclick="filterRegion(\'everything\', this)">📑 Show All</button>')
         tabs_html.append('</div>')
     region_tabs_str = "".join(tabs_html)
 
@@ -3067,12 +3067,29 @@ def build_html_report(config, mats_dir, output_html, slides_data):
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 20px;
+      padding: 0 16px;
+      gap: 12px;
       z-index: 1000;
       box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      overflow-x: auto;
     }
-    .toolbar-left { display: flex; align-items: center; gap: 14px; }
-    .toolbar-title { font-size: 15px; font-weight: 700; color: #bae6fd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+    .toolbar::-webkit-scrollbar { display: none; }
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex-shrink: 1;
+    }
+    .toolbar-title {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: #bae6fd;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 1;
+    }
     
     /* Region Navigation Tabs */
     .region-tabs {
@@ -3083,18 +3100,24 @@ def build_html_report(config, mats_dir, output_html, slides_data):
       padding: 3px 6px;
       border-radius: 8px;
       border: 1px solid #334155;
+      flex-shrink: 0;
     }
     .region-tab {
       background: transparent;
       border: none;
       color: #94a3b8;
-      padding: 4px 10px;
+      height: 26px;
+      padding: 0 10px;
       border-radius: 5px;
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       transition: all 0.15s ease;
       white-space: nowrap;
+      user-select: none;
     }
     .region-tab:hover {
       color: #f8fafc;
@@ -3109,38 +3132,82 @@ def build_html_report(config, mats_dir, output_html, slides_data):
       background: #1e293b;
       color: #f8fafc;
       border: 1px solid #334155;
-      padding: 6px 12px;
+      height: 34px;
+      padding: 0 10px;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 12.5px;
+      font-weight: 500;
       cursor: pointer;
       outline: none;
+      max-width: 260px;
+      text-overflow: ellipsis;
+      flex-shrink: 1;
+      box-sizing: border-box;
     }
-    .toolbar-center { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 13px; }
+    .slide-select:focus { border-color: #0284c7; }
+    .toolbar-center {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
     .counter-badge {
       background: #0284c7;
       color: #ffffff;
-      padding: 4px 10px;
-      border-radius: 12px;
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 6px;
       font-size: 12.5px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      flex-shrink: 0;
+      box-sizing: border-box;
     }
-    .toolbar-right { display: flex; align-items: center; gap: 8px; }
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
     .tool-btn {
       background: #1e293b;
       color: #e2e8f0;
       border: 1px solid #475569;
-      padding: 6px 12px;
+      height: 34px;
+      padding: 0 12px;
       border-radius: 6px;
       font-size: 12.5px;
       font-weight: 600;
       cursor: pointer;
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 5px;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      line-height: 1;
+      box-sizing: border-box;
       transition: all 0.15s ease;
+      user-select: none;
     }
-    .tool-btn:hover { background: #334155; color: #ffffff; }
+    .tool-btn:hover { background: #334155; color: #ffffff; border-color: #64748b; }
+    .tool-btn:focus-visible {
+      outline: 2px solid #38bdf8;
+      outline-offset: 1px;
+    }
+    .tool-btn.active {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    }
     .tool-btn.primary { background: #16a34a; border-color: #15803d; color: #fff; }
-    .tool-btn.primary:hover { background: #15803d; }
+    .tool-btn.primary:hover { background: #15803d; border-color: #166534; }
 
     /* Main Container */
     .presentation-container {
@@ -3166,6 +3233,7 @@ def build_html_report(config, mats_dir, output_html, slides_data):
       position: relative;
       overflow: hidden;
       border: 1px solid #cbd5e1;
+      scroll-margin-top: 68px;
     }
     
     .slide-watermark {
@@ -3568,6 +3636,7 @@ def build_html_report(config, mats_dir, output_html, slides_data):
     let currentSlide = 1;
     const totalSlides = __TOTAL_SLIDES__;
     let isSlideshow = true;
+    let isProgrammaticScroll = false;
 
     function updateSlideUI() {
       if (isSlideshow) {
@@ -3576,7 +3645,7 @@ def build_html_report(config, mats_dir, output_html, slides_data):
         if (el) el.classList.add('active');
       } else {
         const el = document.getElementById('slide-' + currentSlide);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
       document.getElementById('slideCounter').innerText = 'Slide ' + currentSlide + ' / ' + totalSlides;
       document.getElementById('slideSelect').value = currentSlide;
@@ -3594,7 +3663,9 @@ def build_html_report(config, mats_dir, output_html, slides_data):
     function goToSlide(n) {
       if (n >= 1 && n <= totalSlides) {
         currentSlide = n;
+        isProgrammaticScroll = true;
         updateSlideUI();
+        setTimeout(() => { isProgrammaticScroll = false; }, 700);
       }
     }
 
@@ -3602,10 +3673,6 @@ def build_html_report(config, mats_dir, output_html, slides_data):
       if (btn) {
         document.querySelectorAll('.region-tab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-      }
-      if (reg === 'everything') {
-        goToSlide(1);
-        return;
       }
       const target = document.querySelector(`.slide-card[data-region="${reg}"]`);
       if (target) {
@@ -3634,9 +3701,11 @@ def build_html_report(config, mats_dir, output_html, slides_data):
       if (isSlideshow) {
         document.body.className = 'mode-slideshow';
         btn.innerText = '📜 Continuous Scroll';
+        btn.classList.remove('active');
       } else {
         document.body.className = 'mode-scroll';
         btn.innerText = '🖥️ Slideshow Mode';
+        btn.classList.add('active');
       }
       updateSlideUI();
     }
@@ -3648,6 +3717,30 @@ def build_html_report(config, mats_dir, output_html, slides_data):
         document.exitFullscreen().catch(() => {});
       }
     }
+
+    // Auto-update active tab, counter, and select dropdown on scroll
+    const scrollObserver = new IntersectionObserver((entries) => {
+      if (isSlideshow || isProgrammaticScroll) return;
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const sNum = parseInt(entry.target.getAttribute('data-slide-num'));
+          if (sNum && sNum !== currentSlide) {
+            currentSlide = sNum;
+            document.getElementById('slideCounter').innerText = 'Slide ' + currentSlide + ' / ' + totalSlides;
+            document.getElementById('slideSelect').value = currentSlide;
+            const currentReg = entry.target.getAttribute('data-region') || 'all';
+            document.querySelectorAll('.region-tab').forEach(b => {
+              b.classList.toggle('active', b.getAttribute('data-filter') === currentReg);
+            });
+          }
+        }
+      });
+    }, {
+      rootMargin: '-15% 0px -65% 0px',
+      threshold: 0
+    });
+
+    document.querySelectorAll('.slide-card').forEach(card => scrollObserver.observe(card));
 
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
