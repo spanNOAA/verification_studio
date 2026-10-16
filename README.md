@@ -2,134 +2,169 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/spanNOAA/verification_studio?color=blue&label=Latest%20Release)](https://github.com/spanNOAA/verification_studio/releases/latest)
 [![macOS Universal](https://img.shields.io/badge/Platform-macOS%20(Apple%20Silicon%20%2B%20Intel)-brightgreen.svg)](https://github.com/spanNOAA/verification_studio/releases/latest)
-[![Download DMG](https://img.shields.io/badge/Download-Verification__Studio__macOS__Universal.dmg-2563eb?logo=apple&logoColor=white)](https://github.com/spanNOAA/verification_studio/releases/download/v1.0.0/Verification_Studio_macOS_Universal.dmg)
+[![Binary Size](https://img.shields.io/badge/Binary%20Size-16%20MB-blue.svg)](https://github.com/spanNOAA/verification_studio/releases/latest)
+[![DMG Size](https://img.shields.io/badge/DMG%20Installer-9.3%20MB-success.svg)](https://github.com/spanNOAA/verification_studio/releases/latest)
+[![License](https://img.shields.io/badge/License-NOAA%20GSL-informational.svg)](https://github.com/spanNOAA/verification_studio)
 
-An end-to-end automated verification and presentation generation suite engineered for numerical weather prediction models. By supplying experiment model identifiers and verification date ranges, this tool **automatically evaluates NOAA GSL MATS statistical curves, retrieves remote HPC radar reflectivity graphics**, and **generates professional 23-slide PowerPoint presentations and 1:1 synchronized web presentations with a single click**.
-
----
-
-## 1. Key Features
-
-1. **Pure Plotly Canvas Export**:
-   - Directly calls the underlying Plotly canvas export engine (`Plotly.toImage`).
-   - Completely bypasses browser UI elements, navigation bars, controls, and range sliders, preserving only crystal-clear high-definition charts (1761 × 857 resolution).
-
-2. **Consistent Multi-Experiment Styling & Standardized Line Styles**:
-   - **Fixed Color per Model**: Each experiment maintains an identical, high-contrast dedicated palette color across all slides.
-   - **Standardized Line Typology**: **RMSE is strictly solid**, **BIAS is strictly dashed**.
-   - Markers and error bars adaptively inherit their respective experiment's theme color.
-
-3. **Comprehensive Operational Verification Coverage**:
-   - **Surface Dieoff Verification**: 2-m Temperature, 2-m Dewpoint, 10-m Wind Speed.
-   - **Surface Diurnal Time Series**: 1-h, 3-h, 12-h, and 24-h 6-panel diurnal evolution layouts.
-   - **Radar Composite Reflectivity**: Quantitative Dieoff CSI/Bias and 1-h/3-h diurnal evolution at 15 dBZ, 25 dBZ, and 35 dBZ thresholds.
-   - **Cloud Ceiling Dieoff**: Aviation threshold verification (< 500 ft, < 1000 ft, < 3000 ft CSI & Bias).
-   - **Visibility Verification**: Aviation threshold verification (< 1 mi, < 3 mi, < 5 mi CSI & Bias).
-   - **Upper Air Sounding Dieoff (RAOBs)**: Temperature, Wind Speed, Relative Humidity (RHobT).
-   - **Aircraft Observations (AMDAR Traditional)**: Temperature, Wind Speed, and Humidity aloft.
-   - **Upper Air Vertical Profiles**: 1-h, 3-h, 6-h, and 12-h vertical profiles from 1000 hPa to 100 hPa.
-   - **Synoptic Radar Case Comparisons**: Automated side-by-side mosaic layout across severe convective cases (with NSSL MRMS observations).
-
-4. **Universal Graceful Degradation**:
-   - Availability pre-checks are executed before retrieval for every verification category.
-   - If a specific metric or model subset is unavailable in the database, the engine automatically skips or plots available subsets with clean console `[NOTICE]` logs without crashing the pipeline.
-
-5. **Synchronized Dual-Format Output (PowerPoint + 1:1 Interactive HTML)**:
-   - Produces both an editable PPTX deck and a pixel-accurate interactive HTML presentation (`.html`) in the output directory.
-   - Supports keyboard arrow navigation, **Slideshow Mode**, **Continuous Scroll Mode**, and **HD Lightbox zoom** for granular inspection.
-
-6. **Smart Caching & Resumable Execution**:
-   - Downloaded charts and radar images are cached locally. Re-running the pipeline resumes instantly.
-
-7. **Zero-Config HPC Remote Integration**:
-   - Bundles the core `hpc-run` engine for instant remote retrieval of synoptic radar graphics from NOAA HPC clusters (Gaea, Hera, Ursa, Orion, Hercules).
-   - If an HPC cluster session is offline, automatically launches an interactive macOS Terminal window for PIN + YubiKey authentication, and cleanly auto-closes the window once connected.
+An end-to-end automated verification and presentation generation suite engineered for numerical weather prediction models (e.g. RRFS, HRRR). By specifying experiment model identifiers and verification date ranges, Verification Studio **automatically evaluates NOAA GSL MATS statistical curves, retrieves remote HPC radar reflectivity graphics**, and **generates professional 26-slide PowerPoint presentations (.pptx) and 1:1 synchronized interactive web presentations (.html) with a single click**.
 
 ---
 
-## 2. Usage Instructions
+## ⚡ 1. Modern Architecture (Pure Go Engine)
 
-### Method 1: Compiled Native Desktop Application (Verification Studio.app — Recommended)
+Verification Studio v1.0 has been re-architected from the ground up into a **100% pure Go standalone application**:
 
-Built with Go and Cocoa WebKit, this lightweight standalone app provides modern UI controls and real-time streaming console logs:
+1. **Zero Python / Node.js Dependencies**:
+   - The entire verification engine, HTTP automation, Plotly image extraction, PowerPoint compiler, and user interface are written in Go.
+   - No Python runtime, `pip`, virtual environments, or heavy third-party packages required.
+2. **Zero Bundled Browsers**:
+   - Directly reuses host system browsers (**Google Chrome**, **Microsoft Edge**, **Brave**, **Chromium**, or **Arc**) via native Chrome DevTools Protocol (CDP).
+   - Eliminates 400MB+ bundled headless browser downloads.
+3. **Ultra-Lightweight Footprint**:
+   - Standalone application bundle reduced from 471 MB to **16 MB**.
+   - Universal DMG installer reduced from 222 MB to **9.3 MB**.
+4. **Enhanced HD Font & Chart Layout**:
+   - Dynamic layout injection enhances Plotly canvas font sizes (Title 26px, Axes 20px, Ticks/Legend 16px).
+   - Charts remain crystal-clear, bold, and comfortably readable when scaled into 3-panel slides.
+5. **Multi-Domain Regional Evaluation**:
+   - Seamlessly generates Full Domain (`all`), Eastern Region (`east`), and Western Complex Terrain (`west`) verification decks.
+   - Interactive HTML report features instantaneous region switching tabs.
+6. **Unified Dual-Mode (Desktop GUI + Headless CLI)**:
+   - Launch as a native macOS desktop GUI app or run headlessly in CI/CD pipelines and HPC batch scripts using the exact same binary.
 
-1. **How to Launch**:
-   - **Double-click in Finder**:
-     - `Verification Studio.app` (Standard macOS Application bundle with icon)
-   - **Or drag to `/Applications`** to pin to macOS Dock or Launchpad.
-   - **Or launch via terminal**:
-     ```bash
-     mats_reporter/verification_studio
+---
+
+## 📊 2. Verification Coverage
+
+| Category | Verification Source | Evaluated Variables & Metrics |
+| :--- | :--- | :--- |
+| **Surface Dieoff** | METAR station observations (Plot Matched) | 2-m Temperature, 2-m Dewpoint, 10-m Wind Speed (RMSE & BIAS) |
+| **Surface Diurnal Time Series** | METAR station observations | 1-h, 3-h, 12-h, and 24-h forecast diurnal cycles across metrics |
+| **Upper Air Dieoff** | Traditional Rawinsonde (RAOBs) soundings | Temperature, Wind Speed, Relative Humidity (RHobT) |
+| **Upper Air Profiles** | RAOBs soundings (1000 hPa to 100 hPa) | 1-h, 3-h, 6-h, and 12-h vertical profile soundings |
+| **Aircraft Observations** | AMDAR traditional flights | Temperature, Wind Speed, and Humidity aloft |
+| **Cloud Ceiling** | METAR aviation thresholds | Dieoff & Diurnal Time Series at < 500 ft, < 1000 ft, < 3000 ft (CSI & BIAS) |
+| **Visibility** | METAR aviation thresholds | Dieoff & Diurnal Time Series at < 1 mi, < 3 mi, < 5 mi (CSI & BIAS) |
+| **Radar Reflectivity** | NSSL MRMS Quantitative Radar | 15 dBZ, 25 dBZ, 35 dBZ Dieoff & Diurnal Time Series |
+| **Synoptic Radar Mosaic** | Remote HPC model output + MRMS Obs | Side-by-side multi-model synoptic case comparisons |
+
+---
+
+## 🚀 3. Usage Guide
+
+### Method 1: Native macOS Desktop Application (Recommended)
+
+1. **Download & Install**:
+   - Download [`Verification_Studio_macOS_Universal.dmg`](https://github.com/spanNOAA/verification_studio/releases/latest)
+   - Open the DMG and drag **`Verification Studio.app`** to your `/Applications` folder.
+2. **Run**:
+   - Double-click **Verification Studio** from Launchpad or Finder.
+3. **Configure & Start**:
+   - **Report Title**: e.g., `RRFSv2 Model Verification & Performance Evaluation`
+   - **Output Directory**: Click `📂 Browse...` to pick a destination folder.
+   - **Models**: Enter or paste experiments (one per line):
+     ```text
+     retv4:RRFSv2_conus_3km_ret_v2x_retv4 - gaeac6:/gpfs/f6/wrfruc/scratch/my_run/cref
+     generictquv:RRFSv2_conus_3km_ret_generictquv
+     halfTerr:RRFSv2_conus_3km_ret_halfTerr
      ```
-2. **Workflow**:
-   - **1. Report Title**: Enter or edit the presentation title (e.g., `May 6-13 2024 Retro Runs: Evaluation`).
-   - **2. Output Directory**: Type the destination path or click **`📂 Browse...`** to pick a folder.
-   - **3. Experiments**: Enter or paste comparison experiments (one per line). Format supports:
-     - `Experiment_ID - machine:path` (e.g., `RRFSv2_conus_3km_ret_generictquv - gaeac6:/gpfs/f6/wrfruc/scratch/...`)
-     - Or simply `Experiment_ID` (e.g., `RRFSv2_conus_3km_ret_v2x_retv4`)
-     - Machines supported: `gaeac5`, `gaeac6`, `gaeac7`, `gaea`, `hera`, `ursa`, `orion`, `hercules`.
-   - Click **`🚀 Start Automated Generation`**: Watch real-time streaming progress in the live log console.
+   - Click **`🚀 Start Automated Generation`** and watch real-time progress.
 
 ---
 
-### Method 2: Configuration File Mode (YAML)
+### Method 2: Headless CLI Mode
 
-Edit `config_example.yaml`:
+The exact same binary supports headless command-line execution for scripts and automated jobs:
+
+```bash
+./verification_studio \
+  --models "retv4:RRFSv2_conus_3km_ret_v2x_retv4,generictquv:RRFSv2_conus_3km_ret_generictquv" \
+  --sfc-dates "05/06/2024 10:00 - 05/13/2024 00:00" \
+  --ua-dates "05/06/2024 00:00 - 05/13/2024 12:00" \
+  --regions "all,east,west" \
+  --output-dir "~/Desktop/my_verification" \
+  --report-name "RRFSv2_May2024_Report"
+```
+
+---
+
+### Method 3: YAML / JSON Configuration File Mode
+
+Prepare a `config.yaml` (see [`config_example.yaml`](config_example.yaml)):
+
 ```yaml
-title: "May 6-13 2024 Retro Runs: Surface DA & Terrain Error Evaluation"
+title: "RRFSv2 Model Verification & Performance Evaluation"
+
 models:
   - id: "RRFSv2_conus_3km_ret_generictquv"
     name: "generictquv"
-    color: "rgb(255, 0, 0)"
   - id: "RRFSv2_conus_3km_ret_halfTerr"
     name: "halfTerr"
-    color: "rgb(0, 0, 255)"
-  - id: "RRFSv2_conus_3km_ret_RRFSv2X_retv3"
-    name: "retv3"
-    color: "rgb(255, 165, 0)"
   - id: "RRFSv2_conus_3km_ret_v2x_retv4"
     name: "retv4"
-    color: "rgb(128, 128, 128)"
+    cluster: "gaeac6"
+    path: "/gpfs/f6/wrfruc/scratch/my_run/cref"
 
 dates:
   surface: "05/06/2024 10:00 - 05/13/2024 00:00"
   upperair: "05/06/2024 00:00 - 05/13/2024 12:00"
 
-output_dir: "./output"
-output_pptx: "./output/RRFSv2_Verification_Report.pptx"
+regions:
+  - "all"
+  - "east"
+
+output_dir: "~/Desktop/Verification_Output"
+report_name: "RRFSv2_Verification_Report"
 ```
 
-Run via Python:
+Execute with a single command:
 ```bash
-python3 mats_reporter.py --config config_example.yaml
+./verification_studio --config config.yaml
 ```
 
 ---
 
-### Method 3: Command-Line Interface (CLI)
+## 🛠️ 4. CLI Parameter Reference
 
-```bash
-python3 mats_reporter.py \
-  --models "generictquv:RRFSv2_conus_3km_ret_generictquv" \
-           "halfTerr:RRFSv2_conus_3km_ret_halfTerr" \
-           "retv3:RRFSv2_conus_3km_ret_RRFSv2X_retv3" \
-           "retv4:RRFSv2_conus_3km_ret_v2x_retv4" \
-  --surface-dates "05/06/2024 10:00 - 05/13/2024 00:00" \
-  --upperair-dates "05/06/2024 00:00 - 05/13/2024 12:00" \
-  --output-dir "./my_run" \
-  --output-pptx "./my_run/Report.pptx"
-```
+| Flag | Shorthand | Description | Default |
+| :--- | :--- | :--- | :--- |
+| `--config` | `-c` | Path to YAML or JSON configuration file | `""` |
+| `--title` | | Presentation title displayed on cover and slides | `"RRFSv2 Model Verification..."` |
+| `--output-dir`| `-o` | Target directory for generated PPT, HTML, and charts | *(Required)* |
+| `--report-name`| | Base name for output `.pptx` and `.html` files | `"mats_report"` |
+| `--models` | | Evaluated model specifications (comma-separated or text) | `""` |
+| `--sfc-dates` | | Date range for surface & METAR evaluations | `"05/06/2024 10:00 - ..."` |
+| `--ua-dates` | | Date range for upper-air RAOBs & AMDAR soundings | `"05/06/2024 00:00 - ..."` |
+| `--regions` | | Evaluated domains (`all`, `east`, `west`) | `"all"` |
+| `--skip-fetch` | | Skip chart downloads; rebuild reports from local cache | `false` |
+| `--force-fetch`| | Force fresh downloads even if cache exists | `false` |
+| `--include-cref`| | Include synoptic radar composite reflectivity comparison | `false` |
+| `--help` | `-h` | Display help and usage instructions | |
+| `--version` | `-v` | Print version information | |
 
 ---
 
-### CLI Parameter Reference
+## 🔒 5. HPC Remote Integration (`hpc-tools`)
 
-- `--title`: Presentation title displayed on slides and header bar.
-- `--models`: List of models with optional aliases and paths.
-- `--output-dir`: Directory where downloaded charts and assets are stored.
-- `--output-pptx`: Destination file path for the PowerPoint presentation.
-- `--output-html`: Destination file path for the HTML presentation (defaults to same name `.html`).
-- `--skip-fetch`: Skip chart downloads and rebuild PPTX/HTML directly from existing cached images.
-- `--skip-pptx`: Generate HTML and fetch images without creating the PPTX file.
-- `--skip-html`: Skip generation of the HTML presentation.
-- `--skip-cref`: Skip radar composite reflectivity comparison slides.
+Verification Studio incorporates `hpc-run` for secure remote access to NOAA supercomputers:
+- **Supported Clusters**: NOAA RDHPCS Gaea (`gaeac5`, `gaeac6`, `gaeac7`), Hera (`hera`), Ursa (`ursa`), and partners (MSU `orion`, `hercules`).
+- **Read-Only Security**: Strict minimal API (list, stat, download). Arbitrary commands, write, and job submissions are structurally prohibited.
+- **YubiKey / SmartCard Support**: If an HPC session is offline, the studio prompts for one-time interactive PIN + YubiKey authentication in a dedicated terminal window.
+
+---
+
+## 📦 6. Building from Source
+
+To compile the universal macOS binary from source:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/spanNOAA/verification_studio.git
+cd verification_studio
+
+# 2. Build macOS Universal Binary (arm64 + x86_64)
+./build.sh
+
+# 3. Verify output
+./verification_studio --version
+```

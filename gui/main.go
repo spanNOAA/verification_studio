@@ -181,6 +181,10 @@ func openPath(targetPath string) {
 }
 
 func main() {
+	if runCLI(os.Args) {
+		return
+	}
+
 	// Default output directory: dynamically resolve current user's Desktop directory
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {

@@ -1,9 +1,0 @@
-# Generated lockfile for Verification Studio
-playwright==1.60.0
-python-pptx==1.0.2
-PyYAML==6.0.3
-Pillow==11.3.0
-pyee==13.0.1
-greenlet==3.2.5
-xlsxwriter==3.2.9
-typing_extensions==4.16.0
