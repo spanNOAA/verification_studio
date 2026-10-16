@@ -1,10 +1,10 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/webview/webview_go"
+	"verification_studio/internal/pipeline"
 )
 
 //go:embed ui.html
@@ -38,7 +39,8 @@ var (
 	allowedPathsMap  = make(map[string]bool)
 
 	pipelineMutex      sync.Mutex
-	pipelineCmd        *exec.Cmd
+	pipelineCancel     context.CancelFunc
+	isPipelineRunning  bool
 	isPipelineStopping bool
 )
 
@@ -138,18 +140,6 @@ func isPathAllowedToOpen(targetPath string) bool {
 	return false
 }
 
-func getExecutableDir() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return "."
-	}
-	dir := filepath.Dir(exe)
-	if strings.Contains(dir, ".app/Contents/MacOS") {
-		dir = filepath.Clean(filepath.Join(dir, "../../.."))
-	}
-	return dir
-}
-
 func chooseFolderNative() string {
 	if runtime.GOOS == "darwin" {
 		cmd := exec.Command("osascript", "-e", `POSIX path of (choose folder with prompt "Select Output Folder on Desktop" default location (path to desktop folder))`)
@@ -190,73 +180,7 @@ func openPath(targetPath string) {
 	_ = cmd.Start()
 }
 
-func findPython3() string {
-	exe, err := os.Executable()
-	if err == nil {
-		// 1. Check bundled Python inside .app Frameworks: .../Contents/Frameworks/python/bin/python3
-		bundledPy := filepath.Clean(filepath.Join(filepath.Dir(exe), "..", "Frameworks", "python", "bin", "python3"))
-		if _, err := os.Stat(bundledPy); err == nil {
-			return bundledPy
-		}
-	}
-	if venv := os.Getenv("VIRTUAL_ENV"); venv != "" {
-		p := filepath.Join(venv, "bin", "python3")
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	candidates := []string{
-		"/usr/bin/python3",
-		"/usr/local/bin/python3",
-		"/opt/homebrew/bin/python3",
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates,
-			filepath.Join(home, "miniconda3", "bin", "python3"),
-			filepath.Join(home, "anaconda3", "bin", "python3"),
-			filepath.Join(home, ".local", "bin", "python3"),
-		)
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c
-		}
-	}
-	if path, err := exec.LookPath("python3"); err == nil {
-		return path
-	}
-	return "python3"
-}
-
-func findReporterScript(baseDir string) string {
-	exe, err := os.Executable()
-	if err == nil {
-		// Inside macOS .app bundle: .../Contents/MacOS/mats_studio -> .../Contents/Resources/mats_reporter.py
-		resScript := filepath.Clean(filepath.Join(filepath.Dir(exe), "..", "Resources", "mats_reporter.py"))
-		if _, err := os.Stat(resScript); err == nil {
-			return resScript
-		}
-	}
-	candidates := []string{
-		filepath.Join(baseDir, "mats_reporter.py"),
-		filepath.Join(baseDir, "..", "mats_reporter.py"),
-		"./mats_reporter.py",
-		"../mats_reporter.py",
-	}
-	for _, c := range candidates {
-		abs, err := filepath.Abs(c)
-		if err == nil {
-			if _, err := os.Stat(abs); err == nil {
-				return abs
-			}
-		}
-	}
-	return "mats_reporter.py"
-}
-
 func main() {
-	baseDir := getExecutableDir()
-
 	// Default output directory: dynamically resolve current user's Desktop directory
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
@@ -279,8 +203,8 @@ func main() {
 
 	defer func() {
 		pipelineMutex.Lock()
-		if pipelineCmd != nil && pipelineCmd.Process != nil {
-			killCmdProcGroup(pipelineCmd)
+		if pipelineCancel != nil {
+			pipelineCancel()
 		}
 		pipelineMutex.Unlock()
 	}()
@@ -288,8 +212,8 @@ func main() {
 	// Bind native helper methods
 	_ = w.Bind("quitApp", func() {
 		pipelineMutex.Lock()
-		if pipelineCmd != nil && pipelineCmd.Process != nil {
-			killCmdProcGroup(pipelineCmd)
+		if pipelineCancel != nil {
+			pipelineCancel()
 		}
 		pipelineMutex.Unlock()
 		w.Destroy()
@@ -306,17 +230,15 @@ func main() {
 
 	_ = w.Bind("stopPipelineNative", func() {
 		pipelineMutex.Lock()
-		cmd := pipelineCmd
-		if cmd != nil && cmd.Process != nil && !isPipelineStopping {
+		if isPipelineRunning && !isPipelineStopping && pipelineCancel != nil {
 			isPipelineStopping = true
+			cancel := pipelineCancel
 			pipelineMutex.Unlock()
 			b, _ := json.Marshal("\n[USER ACTION] ⏹ Stop request received. Terminating verification pipeline...\n")
 			w.Dispatch(func() {
 				w.Eval(fmt.Sprintf("appendLog(%s)", string(b)))
 			})
-			go func(c *exec.Cmd) {
-				killCmdProcGroup(c)
-			}(cmd)
+			cancel()
 		} else {
 			pipelineMutex.Unlock()
 		}
@@ -324,7 +246,7 @@ func main() {
 
 	_ = w.Bind("runPipelineNative", func(payloadJSON string) {
 		pipelineMutex.Lock()
-		if pipelineCmd != nil && pipelineCmd.Process != nil {
+		if isPipelineRunning {
 			pipelineMutex.Unlock()
 			b, _ := json.Marshal("\n[WARNING] Verification pipeline is already running.\n")
 			w.Dispatch(func() {
@@ -332,11 +254,18 @@ func main() {
 			})
 			return
 		}
+		ctx, cancel := context.WithCancel(context.Background())
+		pipelineCancel = cancel
+		isPipelineRunning = true
 		isPipelineStopping = false
 		pipelineMutex.Unlock()
 
 		var req PipelineRequest
 		if err := json.Unmarshal([]byte(payloadJSON), &req); err != nil {
+			pipelineMutex.Lock()
+			isPipelineRunning = false
+			pipelineCancel = nil
+			pipelineMutex.Unlock()
 			b, _ := json.Marshal(fmt.Sprintf("\n[ERROR] Failed to parse input parameters: %v\n", err))
 			w.Dispatch(func() {
 				w.Eval(fmt.Sprintf("appendLog(%s)", string(b)))
@@ -346,11 +275,13 @@ func main() {
 		}
 
 		go func() {
-			scriptPath := findReporterScript(baseDir)
-
 			// 1. Strict security validation: Output directory MUST be strictly within ~/Desktop
 			validOutDir, err := validateDesktopDir(req.OutputDir)
 			if err != nil {
+				pipelineMutex.Lock()
+				isPipelineRunning = false
+				pipelineCancel = nil
+				pipelineMutex.Unlock()
 				errMsg := fmt.Sprintf("\n[SECURITY ERROR] %v\n", err)
 				b, _ := json.Marshal(errMsg)
 				w.Dispatch(func() {
@@ -367,6 +298,10 @@ func main() {
 			}
 			baseName, err := validateReportName(rawName)
 			if err != nil {
+				pipelineMutex.Lock()
+				isPipelineRunning = false
+				pipelineCancel = nil
+				pipelineMutex.Unlock()
 				errMsg := fmt.Sprintf("\n[SECURITY ERROR] %v\n", err)
 				b, _ := json.Marshal(errMsg)
 				w.Dispatch(func() {
@@ -374,17 +309,6 @@ func main() {
 					w.Eval("onPipelineFinished(false, 'Invalid report name')")
 				})
 				return
-			}
-
-			// Parse models: pass each non-empty trimmed line directly to python script
-			rawLines := strings.Split(req.ModelsText, "\n")
-			var modelArgs []string
-			for _, line := range rawLines {
-				line = strings.TrimSpace(line)
-				if line == "" {
-					continue
-				}
-				modelArgs = append(modelArgs, line)
 			}
 
 			pptxPath := filepath.Join(validOutDir, baseName+".pptx")
@@ -400,55 +324,6 @@ func main() {
 				reportTitle = "RRFSv2 Model Verification & Performance Evaluation"
 			}
 
-			args := []string{
-				scriptPath,
-				"--title", reportTitle,
-				"--output-dir", validOutDir,
-				"--report-name", baseName,
-				"--output-pptx", pptxPath,
-				"--output-html", htmlPath,
-				"--surface-dates", req.SfcDates,
-				"--upperair-dates", req.UaDates,
-			}
-
-			if len(modelArgs) > 0 {
-				args = append(args, "--models")
-				args = append(args, modelArgs...)
-			}
-
-			if req.SkipFetch {
-				args = append(args, "--skip-fetch")
-			}
-
-			if req.ForceFetch {
-				args = append(args, "--force-fetch")
-			}
-
-			if req.IncludeCref {
-				crefDir := filepath.Clean(filepath.Join(validOutDir, "cref"))
-				refDir := filepath.Clean(filepath.Join(validOutDir, "extracted_retv4"))
-				_ = os.MkdirAll(crefDir, 0o755)
-				_ = os.MkdirAll(refDir, 0o755)
-				args = append(args, "--cref-dir", crefDir)
-				args = append(args, "--extracted-ref-dir", refDir)
-
-				if len(req.RadarCases) > 0 {
-					rcStr := strings.TrimSpace(string(req.RadarCases))
-					if rcStr != "" && rcStr != "null" {
-						args = append(args, "--radar-cases", rcStr)
-					}
-				}
-			} else {
-				args = append(args, "--skip-cref")
-			}
-
-			if len(req.Regions) > 0 {
-				args = append(args, "--regions")
-				for _, r := range req.Regions {
-					args = append(args, r)
-				}
-			}
-
 			sendOutput := func(text string) {
 				b, _ := json.Marshal(text)
 				w.Dispatch(func() {
@@ -456,94 +331,27 @@ func main() {
 				})
 			}
 
-			sendOutput(fmt.Sprintf("==================================================================\n"))
-			sendOutput(fmt.Sprintf(" [Go Native Engine] Launching Python verification pipeline...\n"))
-			sendOutput(fmt.Sprintf(" Script  : %s\n", scriptPath))
-			sendOutput(fmt.Sprintf(" Title   : %s\n", req.Title))
-			sendOutput(fmt.Sprintf(" Output  : %s\n", validOutDir))
-			sendOutput(fmt.Sprintf(" Report  : %s (.pptx / .html)\n", baseName))
-			if req.ForceFetch {
-				sendOutput(fmt.Sprintf(" Mode    : 🔄 FORCE REFRESH (Override all cache: MATS + Reflectivity)\n"))
-			} else if req.SkipFetch {
-				sendOutput(fmt.Sprintf(" Mode    : ⚡ SKIP FETCH (Build presentations from local cache only)\n"))
-			} else {
-				sendOutput(fmt.Sprintf(" Mode    : Standard (Incremental cache with image integrity check)\n"))
-			}
-			sendOutput(fmt.Sprintf(" Regions : %s\n", strings.Join(req.Regions, ", ")))
-			sendOutput(fmt.Sprintf(" PPTX    : %s\n", pptxPath))
-			sendOutput(fmt.Sprintf(" HTML    : %s\n", htmlPath))
-			pythonExe := findPython3()
-			sendOutput(fmt.Sprintf(" Python  : %s\n", pythonExe))
-			sendOutput(fmt.Sprintf("==================================================================\n\n"))
-
-			cmd := exec.Command(pythonExe, append([]string{"-u"}, args...)...)
-			env := append(os.Environ(),
-				"PYTHONUNBUFFERED=1",
-				"HPC_NON_INTERACTIVE=1",
-				"PATH="+filepath.Dir(pythonExe)+":/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:"+os.Getenv("PATH"),
-			)
-			repoHpcRun := filepath.Clean(filepath.Join(filepath.Dir(scriptPath), "hpc-tools", "hpc-run"))
-			hpcRunPath := filepath.Clean(filepath.Join(filepath.Dir(pythonExe), "hpc-run"))
-			if _, err := os.Stat(repoHpcRun); err == nil {
-				env = append(env, "HPC_RUN_BIN="+repoHpcRun)
-			} else if _, err := os.Stat(hpcRunPath); err == nil {
-				env = append(env, "HPC_RUN_BIN="+hpcRunPath)
-			}
-			if exe, err := os.Executable(); err == nil {
-				browsersDir := filepath.Clean(filepath.Join(filepath.Dir(exe), "..", "Frameworks", "browsers"))
-				if _, err := os.Stat(browsersDir); err == nil {
-					env = append(env, "PLAYWRIGHT_BROWSERS_PATH="+browsersDir)
-				}
-			}
-			cmd.Env = env
-
-			stdout, err := cmd.StdoutPipe()
-			if err != nil {
-				sendOutput(fmt.Sprintf("\n[ERROR] Failed to create stdout pipe: %v\n", err))
-				w.Dispatch(func() { w.Eval("onPipelineFinished(false, 'Failed to create stdout pipe')") })
-				return
-			}
-			stderr, err := cmd.StderrPipe()
-			if err != nil {
-				sendOutput(fmt.Sprintf("\n[ERROR] Failed to create stderr pipe: %v\n", err))
-				w.Dispatch(func() { w.Eval("onPipelineFinished(false, 'Failed to create stderr pipe')") })
-				return
+			pipeReq := pipeline.Request{
+				Title:       reportTitle,
+				OutputDir:   validOutDir,
+				ReportName:  baseName,
+				ModelsText:  req.ModelsText,
+				SfcDates:    req.SfcDates,
+				UaDates:     req.UaDates,
+				Regions:     req.Regions,
+				SkipFetch:   req.SkipFetch,
+				ForceFetch:  req.ForceFetch,
+				IncludeCref: req.IncludeCref,
+				RadarCases:  req.RadarCases,
 			}
 
-			prepareCmdProcGroup(cmd)
-			if err := cmd.Start(); err != nil {
-				sendOutput(fmt.Sprintf("\n[ERROR] Failed to start python process: %v\n", err))
-				w.Dispatch(func() { w.Eval("onPipelineFinished(false, 'Failed to start process')") })
-				return
-			}
-
-			pipelineMutex.Lock()
-			pipelineCmd = cmd
-			pipelineMutex.Unlock()
-
-			// Stream stdout and stderr concurrently
-			readStream := func(r io.Reader) {
-				buf := make([]byte, 1024)
-				for {
-					n, err := r.Read(buf)
-					if n > 0 {
-						sendOutput(string(buf[:n]))
-					}
-					if err != nil {
-						break
-					}
-				}
-			}
-
-			go readStream(stdout)
-			go readStream(stderr)
-
-			cmdErr := cmd.Wait()
+			pipeErr := pipeline.Run(ctx, pipeReq, sendOutput)
 
 			pipelineMutex.Lock()
 			wasStopped := isPipelineStopping
-			pipelineCmd = nil
+			isPipelineRunning = false
 			isPipelineStopping = false
+			pipelineCancel = nil
 			pipelineMutex.Unlock()
 
 			if wasStopped {
@@ -551,10 +359,10 @@ func main() {
 				w.Dispatch(func() {
 					w.Eval("onPipelineFinished(false, 'Pipeline stopped by user')")
 				})
-			} else if cmdErr != nil {
-				sendOutput(fmt.Sprintf("\n[ERROR] Execution interrupted or exited with error: %v\n", cmdErr))
+			} else if pipeErr != nil {
+				sendOutput(fmt.Sprintf("\n[ERROR] Execution interrupted or exited with error: %v\n", pipeErr))
 				w.Dispatch(func() {
-					w.Eval("onPipelineFinished(false, 'Execution error')")
+					w.Eval(fmt.Sprintf("onPipelineFinished(false, 'Execution error: %v')", pipeErr))
 				})
 			} else {
 				sendOutput(fmt.Sprintf("\n[SUCCESS] Verification pipeline completed successfully! Synchronized PPT and HTML presentations generated:\n  • PPT : %s\n  • HTML: %s\n", pptxPath, htmlPath))
