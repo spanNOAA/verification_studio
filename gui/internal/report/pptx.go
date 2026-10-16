@@ -68,7 +68,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 		}
 		p.GetAlignment().SetHorizontal(goppt.HorizontalCenter)
 		tr := p.CreateTextRun(title)
-		tr.GetFont().SetSize(19).SetBold(true).SetColor(goppt.NewColor("FF102C57"))
+		tr.GetFont().SetSize(21).SetBold(true).SetColor(goppt.NewColor("FF102C57"))
 	}
 
 	addLegendBox := func(slide *goppt.Slide, isBias bool, metric string) {
@@ -134,7 +134,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 				p = lbl.CreateParagraph()
 			}
 			tr := p.CreateTextRun(l1)
-			tr.GetFont().SetBold(true)
+			tr.GetFont().SetSize(14).SetBold(true)
 		}
 
 		if p2 != "" {
@@ -147,7 +147,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 				p = lbl.CreateParagraph()
 			}
 			tr := p.CreateTextRun(l2)
-			tr.GetFont().SetBold(true)
+			tr.GetFont().SetSize(14).SetBold(true)
 		}
 
 		if p3 != "" {
@@ -160,7 +160,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 				p = lbl.CreateParagraph()
 			}
 			tr := p.CreateTextRun(l3)
-			tr.GetFont().SetBold(true)
+			tr.GetFont().SetSize(14).SetBold(true)
 		}
 
 		addLegendBox(slide, isBias, metric)
@@ -219,7 +219,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 		}
 		p1.GetAlignment().SetHorizontal(goppt.HorizontalCenter)
 		tr1 := p1.CreateTextRun(col1Name)
-		tr1.GetFont().SetSize(13).SetBold(true)
+		tr1.GetFont().SetSize(15).SetBold(true)
 
 		// Column header 2
 		t2 := slide.AddTextBox()
@@ -230,7 +230,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 		}
 		p2.GetAlignment().SetHorizontal(goppt.HorizontalCenter)
 		tr2 := p2.CreateTextRun(col2Name)
-		tr2.GetFont().SetSize(13).SetBold(true)
+		tr2.GetFont().SetSize(15).SetBold(true)
 
 		hPic := int64(1.44 * 914400)
 		gapY := int64(0.06 * 914400)
@@ -247,7 +247,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 			}
 			lp.GetAlignment().SetHorizontal(goppt.HorizontalRight)
 			ltr := lp.CreateTextRun(r.Label)
-			ltr.GetFont().SetSize(11).SetBold(true)
+			ltr.GetFont().SetSize(13).SetBold(true)
 
 			if r.Img1 != "" {
 				img := slide.CreateDrawingShape()
@@ -336,7 +336,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 				}
 				p.GetAlignment().SetHorizontal(goppt.HorizontalCenter)
 				tr := p.CreateTextRun("Temperature (t)")
-				tr.GetFont().SetSize(11).SetBold(true)
+				tr.GetFont().SetSize(14).SetBold(true)
 
 				img := slide.CreateDrawingShape()
 				img.SetPath(pT).SetOffsetX(c1X).SetOffsetY(goppt.Inch(0.80)).SetWidth(pSize).SetHeight(pSize)
@@ -350,7 +350,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 				}
 				p.GetAlignment().SetHorizontal(goppt.HorizontalCenter)
 				tr := p.CreateTextRun("Wind")
-				tr.GetFont().SetSize(11).SetBold(true)
+				tr.GetFont().SetSize(14).SetBold(true)
 
 				img := slide.CreateDrawingShape()
 				img.SetPath(pW).SetOffsetX(c2X).SetOffsetY(goppt.Inch(0.80)).SetWidth(pSize).SetHeight(pSize)
@@ -365,7 +365,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 			}
 			p.GetAlignment().SetHorizontal(goppt.HorizontalCenter)
 			tr := p.CreateTextRun("Relative Humidity (RHobT)")
-			tr.GetFont().SetSize(11).SetBold(true)
+			tr.GetFont().SetSize(14).SetBold(true)
 
 			img := slide.CreateDrawingShape()
 			img.SetPath(pRH).SetOffsetX(c1X).SetOffsetY(goppt.Inch(3.20)).SetWidth(pSize).SetHeight(pSize)
@@ -390,7 +390,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 				}
 				p.GetAlignment().SetHorizontal(goppt.HorizontalCenter)
 				tr := p.CreateTextRun("Temperature (t)")
-				tr.GetFont().SetSize(12).SetBold(true)
+				tr.GetFont().SetSize(14).SetBold(true)
 
 				img := slide.CreateDrawingShape()
 				img.SetPath(pT).SetOffsetX(c1X).SetOffsetY(goppt.Inch(0.88)).SetWidth(pSize).SetHeight(pSize)
@@ -404,7 +404,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 				}
 				p.GetAlignment().SetHorizontal(goppt.HorizontalCenter)
 				tr := p.CreateTextRun("Wind")
-				tr.GetFont().SetSize(12).SetBold(true)
+				tr.GetFont().SetSize(14).SetBold(true)
 
 				img := slide.CreateDrawingShape()
 				img.SetPath(pW).SetOffsetX(c2X).SetOffsetY(goppt.Inch(0.88)).SetWidth(pSize).SetHeight(pSize)
@@ -628,8 +628,12 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 
 	// -------------------------------------------------------------
 	// Slide 1: Title & Overview
+	// Reuse slide 0 created by goppt.New() to prevent empty slide 1
 	// -------------------------------------------------------------
-	s1 := prs.CreateSlide()
+	s1, err := prs.GetSlide(0)
+	if err != nil || s1 == nil {
+		s1 = prs.CreateSlide()
+	}
 	tb := s1.AddTextBox()
 	tb.SetOffsetX(goppt.Inch(0.6)).SetOffsetY(goppt.Inch(0.4)).SetWidth(goppt.Inch(8.8)).SetHeight(goppt.Inch(0.8))
 	p := tb.GetActiveParagraph()
@@ -782,7 +786,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 					lp = lbl.CreateParagraph()
 				}
 				ltr := lp.CreateTextRun(card.Name)
-				ltr.GetFont().SetSize(11).SetBold(true)
+				ltr.GetFont().SetSize(13).SetBold(true)
 
 				if card.ImgPath != "" && isFileValid(card.ImgPath) {
 					img := sRadar.CreateDrawingShape()

@@ -37,6 +37,29 @@ func (c *Client) FetchUpperAirDieoff(
 		regions = []string{"all"}
 	}
 
+	// 1. Check if all target charts already exist locally
+	allExist := true
+	for _, reg := range regions {
+		regTag := ""
+		if reg != "all" {
+			regTag = "_" + reg
+		}
+		for _, v := range UADieoffVars {
+			fn := fmt.Sprintf("ua_dieoff_%s%s.png", v.Tag, regTag)
+			if !isFileValid(filepath.Join(outDir, fn)) {
+				allExist = false
+				break
+			}
+		}
+		if !allExist {
+			break
+		}
+	}
+	if !forceFetch && allExist {
+		fmt.Println("  [CACHE HIT] All Upper Air Dieoff charts already exist in cache. Skipping download.")
+		return nil
+	}
+
 	tabCtx, cancel := c.session.NewTab(60 * time.Second)
 	defer cancel()
 
@@ -217,6 +240,29 @@ func (c *Client) FetchUpperAirProfiles(
 ) error {
 	if len(regions) == 0 {
 		regions = []string{"all"}
+	}
+
+	// 1. Check if all target charts already exist locally
+	allExist := true
+	for _, reg := range regions {
+		regTag := ""
+		if reg != "all" {
+			regTag = "_" + reg
+		}
+		for _, cfg := range UAProfileConfigs {
+			fn := fmt.Sprintf("ua_prof_%sh_%s%s.png", cfg.Fhr, cfg.VarTag, regTag)
+			if !isFileValid(filepath.Join(outDir, fn)) {
+				allExist = false
+				break
+			}
+		}
+		if !allExist {
+			break
+		}
+	}
+	if !forceFetch && allExist {
+		fmt.Println("  [CACHE HIT] All Upper Air Profile charts already exist in cache. Skipping download.")
+		return nil
 	}
 
 	tabCtx, cancel := c.session.NewTab(60 * time.Second)

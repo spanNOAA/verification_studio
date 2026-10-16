@@ -692,7 +692,7 @@ const htmlTemplate = `<!DOCTYPE html>
       flex-shrink: 0;
     }
     .slide-header h2 {
-      font-size: 18px;
+      font-size: 22px;
       font-weight: 800;
       color: #102c57;
       letter-spacing: -0.2px;
@@ -821,9 +821,9 @@ const htmlTemplate = `<!DOCTYPE html>
       top: 6px; left: 8px;
       background: rgba(16, 44, 87, 0.85);
       color: #ffffff;
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 700;
-      padding: 2px 8px;
+      padding: 3px 10px;
       border-radius: 4px;
       z-index: 2;
     }
@@ -835,7 +835,7 @@ const htmlTemplate = `<!DOCTYPE html>
       display: flex;
       flex-direction: column;
       gap: 6px;
-      font-size: 11.5px;
+      font-size: 12px;
       justify-content: center;
     }
     .legend-title { font-weight: 700; color: #1e293b; margin-bottom: 2px; }
@@ -859,8 +859,8 @@ const htmlTemplate = `<!DOCTYPE html>
     }
     .ts-header-row {
       display: flex;
-      height: 22px;
-      font-size: 13px;
+      height: 24px;
+      font-size: 15px;
       font-weight: 700;
       color: #102c57;
       text-align: center;
@@ -876,7 +876,7 @@ const htmlTemplate = `<!DOCTYPE html>
     .ts-row-label {
       width: 90px;
       flex-shrink: 0;
-      font-size: 12px;
+      font-size: 13.5px;
       font-weight: 700;
       color: #334155;
       text-align: right;
@@ -945,9 +945,9 @@ const htmlTemplate = `<!DOCTYPE html>
       top: 6px; left: 10px;
       background: rgba(16, 44, 87, 0.85);
       color: #ffffff;
-      font-size: 11.5px;
+      font-size: 14px;
       font-weight: 700;
-      padding: 3px 8px;
+      padding: 3px 10px;
       border-radius: 4px;
       z-index: 2;
     }
@@ -976,9 +976,9 @@ const htmlTemplate = `<!DOCTYPE html>
       top: 4px; left: 6px;
       background: rgba(15, 23, 42, 0.85);
       color: #ffffff;
-      font-size: 11px;
+      font-size: 13.5px;
       font-weight: 700;
-      padding: 2px 6px;
+      padding: 3px 8px;
       border-radius: 4px;
       z-index: 2;
     }

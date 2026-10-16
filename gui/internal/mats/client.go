@@ -168,11 +168,46 @@ func (c *Client) ExportStyledChart(ctx context.Context, outPath string, colorMap
 			}
 		});
 
-		if (gd.layout && gd.layout.legend) {
-			gd.layout.legend.font = { size: 12, color: '#1e293b' };
-			gd.layout.legend.bgcolor = 'rgba(255, 255, 255, 0.85)';
-			gd.layout.legend.bordercolor = 'rgba(203, 213, 225, 0.8)';
-			gd.layout.legend.borderwidth = 1;
+		if (gd.layout) {
+			// Enlarge chart title (v1 & v2 compatible)
+			if (gd.layout.title) {
+				if (typeof gd.layout.title === 'string') {
+					gd.layout.titlefont = Object.assign({}, gd.layout.titlefont, { size: 26, color: '#0f172a' });
+					gd.layout.title = { text: gd.layout.title, font: { size: 26, color: '#0f172a' } };
+				} else {
+					gd.layout.title.font = Object.assign({}, gd.layout.title.font, { size: 26, color: '#0f172a' });
+				}
+			} else if (gd.layout.titlefont) {
+				gd.layout.titlefont.size = 26;
+			}
+
+			// Enlarge axes titles & tick fonts (v1 & v2 compatible)
+			['xaxis', 'yaxis', 'xaxis2', 'yaxis2'].forEach(ax => {
+				if (gd.layout[ax]) {
+					if (gd.layout[ax].title) {
+						if (typeof gd.layout[ax].title === 'string') {
+							gd.layout[ax].titlefont = Object.assign({}, gd.layout[ax].titlefont, { size: 20, color: '#1e293b' });
+							gd.layout[ax].title = { text: gd.layout[ax].title, font: { size: 20, color: '#1e293b' } };
+						} else {
+							gd.layout[ax].title.font = Object.assign({}, gd.layout[ax].title.font, { size: 20, color: '#1e293b' });
+						}
+					} else if (gd.layout[ax].titlefont) {
+						gd.layout[ax].titlefont.size = 20;
+					}
+					if (gd.layout[ax].tickfont) {
+						gd.layout[ax].tickfont.size = 16;
+					} else {
+						gd.layout[ax].tickfont = { size: 16, color: '#334155' };
+					}
+				}
+			});
+
+			if (gd.layout.legend) {
+				gd.layout.legend.font = { size: 16, color: '#1e293b' };
+				gd.layout.legend.bgcolor = 'rgba(255, 255, 255, 0.85)';
+				gd.layout.legend.bordercolor = 'rgba(203, 213, 225, 0.8)';
+				gd.layout.legend.borderwidth = 1;
+			}
 		}
 
 		Plotly.redraw(gd);
