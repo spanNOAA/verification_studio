@@ -29,8 +29,8 @@ Verification Studio v1.0 has been re-architected from the ground up into a **100
 5. **Multi-Domain Regional Evaluation**:
    - Seamlessly generates Full Domain (`all`), Eastern Region (`east`), and Western Complex Terrain (`west`) verification decks.
    - Interactive HTML report features instantaneous region switching tabs.
-6. **Unified Dual-Mode (Desktop GUI + Headless CLI)**:
-   - Launch as a native macOS desktop GUI app or run headlessly in CI/CD pipelines and HPC batch scripts using the exact same binary.
+6. **Native macOS Desktop Experience**:
+   - Modern, clean native user interface with embedded real-time progress bars, live log console, and one-click folder browsing.
 
 ---
 
@@ -50,101 +50,31 @@ Verification Studio v1.0 has been re-architected from the ground up into a **100
 
 ---
 
-## 🚀 3. Usage Guide
-
-### Method 1: Native macOS Desktop Application (Recommended)
+## 🚀 3. Usage Guide (Native macOS Desktop App)
 
 1. **Download & Install**:
    - Download [`Verification_Studio_macOS_Universal.dmg`](https://github.com/spanNOAA/verification_studio/releases/latest)
    - Open the DMG and drag **`Verification Studio.app`** to your `/Applications` folder.
-2. **Run**:
-   - Double-click **Verification Studio** from Launchpad or Finder.
-3. **Configure & Start**:
+2. **Launch Application**:
+   - Double-click **Verification Studio** from Launchpad, Finder, or `/Applications`.
+3. **Configure Settings**:
    - **Report Title**: e.g., `RRFSv2 Model Verification & Performance Evaluation`
-   - **Output Directory**: Click `📂 Browse...` to pick a destination folder.
+   - **Output Directory**: Click `📂 Browse...` to pick a destination folder on your Desktop.
    - **Models**: Enter or paste experiments (one per line):
      ```text
      retv4:RRFSv2_conus_3km_ret_v2x_retv4 - gaeac6:/gpfs/f6/wrfruc/scratch/my_run/cref
      generictquv:RRFSv2_conus_3km_ret_generictquv
      halfTerr:RRFSv2_conus_3km_ret_halfTerr
      ```
-   - Click **`🚀 Start Automated Generation`** and watch real-time progress.
+   - **Date Ranges**: Specify Surface (METAR) and Upper-Air (RAOBs/AMDAR) date ranges.
+   - **Evaluated Regions**: Toggle Full Domain (`all`), Eastern (`east`), and Western Complex Terrain (`west`).
+4. **Generate**:
+   - Click **`🚀 Start Automated Generation`** and monitor the live dual-tier progress bar and output logs.
+   - Upon completion, synchronized `.pptx` and `.html` presentation decks are instantly available in your destination directory.
 
 ---
 
-### Method 2: Headless CLI Mode
-
-The exact same binary supports headless command-line execution for scripts and automated jobs:
-
-```bash
-./verification_studio \
-  --models "retv4:RRFSv2_conus_3km_ret_v2x_retv4,generictquv:RRFSv2_conus_3km_ret_generictquv" \
-  --sfc-dates "05/06/2024 10:00 - 05/13/2024 00:00" \
-  --ua-dates "05/06/2024 00:00 - 05/13/2024 12:00" \
-  --regions "all,east,west" \
-  --output-dir "~/Desktop/my_verification" \
-  --report-name "RRFSv2_May2024_Report"
-```
-
----
-
-### Method 3: YAML / JSON Configuration File Mode
-
-Prepare a `config.yaml` (see [`config_example.yaml`](config_example.yaml)):
-
-```yaml
-title: "RRFSv2 Model Verification & Performance Evaluation"
-
-models:
-  - id: "RRFSv2_conus_3km_ret_generictquv"
-    name: "generictquv"
-  - id: "RRFSv2_conus_3km_ret_halfTerr"
-    name: "halfTerr"
-  - id: "RRFSv2_conus_3km_ret_v2x_retv4"
-    name: "retv4"
-    cluster: "gaeac6"
-    path: "/gpfs/f6/wrfruc/scratch/my_run/cref"
-
-dates:
-  surface: "05/06/2024 10:00 - 05/13/2024 00:00"
-  upperair: "05/06/2024 00:00 - 05/13/2024 12:00"
-
-regions:
-  - "all"
-  - "east"
-
-output_dir: "~/Desktop/Verification_Output"
-report_name: "RRFSv2_Verification_Report"
-```
-
-Execute with a single command:
-```bash
-./verification_studio --config config.yaml
-```
-
----
-
-## 🛠️ 4. CLI Parameter Reference
-
-| Flag | Shorthand | Description | Default |
-| :--- | :--- | :--- | :--- |
-| `--config` | `-c` | Path to YAML or JSON configuration file | `""` |
-| `--title` | | Presentation title displayed on cover and slides | `"RRFSv2 Model Verification..."` |
-| `--output-dir`| `-o` | Target directory for generated PPT, HTML, and charts | *(Required)* |
-| `--report-name`| | Base name for output `.pptx` and `.html` files | `"mats_report"` |
-| `--models` | | Evaluated model specifications (comma-separated or text) | `""` |
-| `--sfc-dates` | | Date range for surface & METAR evaluations | `"05/06/2024 10:00 - ..."` |
-| `--ua-dates` | | Date range for upper-air RAOBs & AMDAR soundings | `"05/06/2024 00:00 - ..."` |
-| `--regions` | | Evaluated domains (`all`, `east`, `west`) | `"all"` |
-| `--skip-fetch` | | Skip chart downloads; rebuild reports from local cache | `false` |
-| `--force-fetch`| | Force fresh downloads even if cache exists | `false` |
-| `--include-cref`| | Include synoptic radar composite reflectivity comparison | `false` |
-| `--help` | `-h` | Display help and usage instructions | |
-| `--version` | `-v` | Print version information | |
-
----
-
-## 🔒 5. Native Pure Go HPC Integration (`RO-v1` Engine)
+## 🔒 4. Native Pure Go HPC Integration (`RO-v1` Engine)
 
 Verification Studio includes a **built-in, native Pure Go HPC read-only engine** for secure, self-contained remote access to NOAA supercomputers with zero external dependencies:
 
@@ -160,7 +90,7 @@ Verification Studio includes a **built-in, native Pure Go HPC read-only engine**
   - Prompts for interactive username confirmation with candidate default, persisting confirmed credentials to `~/.hpc_user_<cluster>`.
 - **Automatic Session Teardown**:
   - Background HPC session tunnels automatically disconnect and clean up socket files upon verification report completion, preventing persistent lingering connections.
-- **Built-in CLI Commands**:
+- **Built-in HPC Tools**:
   ```bash
   # Check cluster connection status
   ./verification_studio hpc-run --status
@@ -175,7 +105,7 @@ Verification Studio includes a **built-in, native Pure Go HPC read-only engine**
 
 ---
 
-## 📦 6. Building from Source
+## 📦 5. Building from Source
 
 To compile the universal macOS binary from source:
 
