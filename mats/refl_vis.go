@@ -168,12 +168,11 @@ func (c *Client) fetchSingleRadarChart(
 	tabCtx, cancel := c.session.NewTab(75 * time.Second)
 	defer cancel()
 
-	if err := chromedp.Do(tabCtx,
-		chromedp.Navigate("https://gsl.noaa.gov/mats/radar"),
-		chromedp.WaitVisible("#plotTypes-selector"),
-		chromedp.SetValue("#plotTypes-selector", plotType),
-	); err != nil {
-		return fmt.Errorf("failed to open and select %s: %w", plotType, err)
+	if err := c.OpenMATSPage(tabCtx, "https://gsl.noaa.gov/mats/radar"); err != nil {
+		return fmt.Errorf("failed to open MATS radar page: %w", err)
+	}
+	if err := chromedp.Do(tabCtx, chromedp.SetValue("#plotTypes-selector", plotType)); err != nil {
+		return fmt.Errorf("failed to select %s: %w", plotType, err)
 	}
 
 	time.Sleep(600 * time.Millisecond)
@@ -527,12 +526,11 @@ func (c *Client) fetchSingleCeilVisChart(
 	tabCtx, cancel := c.session.NewTab(75 * time.Second)
 	defer cancel()
 
-	if err := chromedp.Do(tabCtx,
-		chromedp.Navigate("https://gsl.noaa.gov/mats/ceil-vis"),
-		chromedp.WaitVisible("#plotTypes-selector"),
-		chromedp.SetValue("#plotTypes-selector", plotType),
-	); err != nil {
-		return fmt.Errorf("failed to open and select %s: %w", plotType, err)
+	if err := c.OpenMATSPage(tabCtx, "https://gsl.noaa.gov/mats/ceil-vis"); err != nil {
+		return fmt.Errorf("failed to open MATS ceil-vis page: %w", err)
+	}
+	if err := chromedp.Do(tabCtx, chromedp.SetValue("#plotTypes-selector", plotType)); err != nil {
+		return fmt.Errorf("failed to select %s: %w", plotType, err)
 	}
 
 	time.Sleep(600 * time.Millisecond)

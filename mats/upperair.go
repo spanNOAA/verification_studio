@@ -101,12 +101,11 @@ func (c *Client) fetchSingleUADieoff(
 	tabCtx, cancel := c.session.NewTab(75 * time.Second)
 	defer cancel()
 
-	if err := chromedp.Do(tabCtx,
-		chromedp.Navigate("https://gsl.noaa.gov/mats/upperair"),
-		chromedp.WaitVisible("#plotTypes-selector"),
-		chromedp.SetValue("#plotTypes-selector", "Dieoff"),
-	); err != nil {
-		return fmt.Errorf("failed to open and select Dieoff: %w", err)
+	if err := c.OpenMATSPage(tabCtx, "https://gsl.noaa.gov/mats/upperair"); err != nil {
+		return fmt.Errorf("failed to open MATS UpperAir page: %w", err)
+	}
+	if err := chromedp.Do(tabCtx, chromedp.SetValue("#plotTypes-selector", "Dieoff")); err != nil {
+		return fmt.Errorf("failed to select Dieoff: %w", err)
 	}
 
 	time.Sleep(600 * time.Millisecond)
@@ -287,12 +286,11 @@ func (c *Client) fetchSingleUAProfile(
 	tabCtx, cancel := c.session.NewTab(75 * time.Second)
 	defer cancel()
 
-	if err := chromedp.Do(tabCtx,
-		chromedp.Navigate("https://gsl.noaa.gov/mats/upperair"),
-		chromedp.WaitVisible("#plotTypes-selector"),
-		chromedp.SetValue("#plotTypes-selector", "Profile"),
-	); err != nil {
-		return fmt.Errorf("failed to open and select Profile: %w", err)
+	if err := c.OpenMATSPage(tabCtx, "https://gsl.noaa.gov/mats/upperair"); err != nil {
+		return fmt.Errorf("failed to open MATS UpperAir page: %w", err)
+	}
+	if err := chromedp.Do(tabCtx, chromedp.SetValue("#plotTypes-selector", "Profile")); err != nil {
+		return fmt.Errorf("failed to select Profile: %w", err)
 	}
 
 	time.Sleep(600 * time.Millisecond)
@@ -478,12 +476,11 @@ func (c *Client) fetchSingleAMDARDieoff(
 	tabCtx, cancel := c.session.NewTab(75 * time.Second)
 	defer cancel()
 
-	if err := chromedp.Do(tabCtx,
-		chromedp.Navigate("https://gsl.noaa.gov/mats/upperair"),
-		chromedp.WaitVisible("#plotTypes-selector"),
-		chromedp.SetValue("#plotTypes-selector", "Dieoff"),
-	); err != nil {
-		return fmt.Errorf("failed to open and select Dieoff: %w", err)
+	if err := c.OpenMATSPage(tabCtx, "https://gsl.noaa.gov/mats/upperair"); err != nil {
+		return fmt.Errorf("failed to open MATS UpperAir page: %w", err)
+	}
+	if err := chromedp.Do(tabCtx, chromedp.SetValue("#plotTypes-selector", "Dieoff")); err != nil {
+		return fmt.Errorf("failed to select Dieoff: %w", err)
 	}
 
 	time.Sleep(600 * time.Millisecond)
@@ -574,12 +571,11 @@ func (c *Client) fetchSingleAMDARProfile(
 	tabCtx, cancel := c.session.NewTab(75 * time.Second)
 	defer cancel()
 
-	if err := chromedp.Do(tabCtx,
-		chromedp.Navigate("https://gsl.noaa.gov/mats/upperair"),
-		chromedp.WaitVisible("#plotTypes-selector"),
-		chromedp.SetValue("#plotTypes-selector", "Profile"),
-	); err != nil {
-		return fmt.Errorf("failed to open and select Profile: %w", err)
+	if err := c.OpenMATSPage(tabCtx, "https://gsl.noaa.gov/mats/upperair"); err != nil {
+		return fmt.Errorf("failed to open MATS UpperAir page: %w", err)
+	}
+	if err := chromedp.Do(tabCtx, chromedp.SetValue("#plotTypes-selector", "Profile")); err != nil {
+		return fmt.Errorf("failed to select Profile: %w", err)
 	}
 
 	time.Sleep(600 * time.Millisecond)

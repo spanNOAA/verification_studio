@@ -276,6 +276,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 	matsClient := mats.NewClient(session)
 	matsClient.SetLogger(func(s string) { log("%s", s) })
 	mrmsClient := mrms.NewClient(session)
+	mrmsClient.SetLogger(func(s string) { log("%s", s) })
 
 	// Calculate dynamic stage weights
 	// Standard stages:
@@ -307,6 +308,12 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 	stageIdx := 0
 
 	if !req.SkipFetch {
+		isolateBrowser := func(stageName string) {
+			if rErr := session.Restart(ctx); rErr != nil {
+				log("  [BROWSER REFRESH WARNING] Failed to isolate session for %s: %v\n", stageName, rErr)
+			}
+		}
+
 		// Stage 1: Surface Dieoff
 		stageIdx++
 		log(">>> [%d/%d] Fetching Surface Dieoff Verification...\n", stageIdx, totalStages)
@@ -320,6 +327,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		}
 
 		// Stage 2: Surface Time Series
+		isolateBrowser("Surface Time Series")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Surface Time Series (1h, 3h, 12h, 24h)...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Surface Time Series")
@@ -332,6 +340,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		}
 
 		// Stage 3: Upper Air Dieoff against RAOBs
+		isolateBrowser("Upper Air Dieoff")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Upper Air Dieoff against RAOBs...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Upper Air RAOBs Dieoff")
@@ -344,6 +353,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		}
 
 		// Stage 4: Upper Air Profiles
+		isolateBrowser("Upper Air Profiles")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Upper Air Profiles (1h, 3h, 6h, 12h)...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Upper Air Profiles")
@@ -356,6 +366,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		}
 
 		// Stage 5: Upper Air AMDAR
+		isolateBrowser("Upper Air AMDAR")
 		stageIdx++
 		log("\n>>> [%d/%d] Checking Upper Air AMDAR Verification...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Upper Air AMDAR")
@@ -368,6 +379,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		}
 
 		// Stage 6: Composite Reflectivity
+		isolateBrowser("Radar Reflectivity")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Radar Composite Reflectivity (15, 25, 35 dBZ)...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Radar Reflectivity")
@@ -380,6 +392,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		}
 
 		// Stage 7: Cloud Ceiling
+		isolateBrowser("Cloud Ceiling")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Cloud Ceiling Verification (500ft, 1000ft, 3000ft)...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Cloud Ceiling")
@@ -392,6 +405,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		}
 
 		// Stage 8: Visibility
+		isolateBrowser("Visibility")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Surface Visibility Verification (1mi, 3mi, 5mi)...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Visibility")
@@ -410,15 +424,17 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			reportProgress(stageIdx, 0, "HPC Radar Retrieval")
 			err = hpc.DownloadRadarImages(models, crefDir, radarCases, req.ForceFetch, func(pct int, msg string) {
 				reportProgress(stageIdx, pct, msg)
-			})
+			}, func(s string) { log("%s", s) })
 			if err != nil {
 				log("  [HPC RADAR ERROR] %v\n", err)
 			}
 
 			// Stage 10: MRMS Observation Images
+			isolateBrowser("MRMS Observations")
 			stageIdx++
 			log("\n>>> [%d/%d] Retrieving Observed MRMS Maps from NOAA NSSL Product Viewer...\n", stageIdx, totalStages)
 			reportProgress(stageIdx, 0, "MRMS Observations")
+
 			err = mrmsClient.FetchRadarImages(radarCases, crefDir, req.ForceFetch, func(pct int, msg string) {
 				reportProgress(stageIdx, pct, msg)
 			})

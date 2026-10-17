@@ -103,12 +103,11 @@ func (c *Client) fetchSingleSurfaceDieoff(
 	defer cancel()
 
 	// 1. Navigate and set Plot Type to Dieoff
-	if err := chromedp.Do(tabCtx,
-		chromedp.Navigate("https://gsl.noaa.gov/mats/surface"),
-		chromedp.WaitVisible("#plotTypes-selector"),
-		chromedp.SetValue("#plotTypes-selector", "Dieoff"),
-	); err != nil {
-		return fmt.Errorf("failed to open and select Dieoff: %w", err)
+	if err := c.OpenMATSPage(tabCtx, "https://gsl.noaa.gov/mats/surface"); err != nil {
+		return fmt.Errorf("failed to open MATS surface page: %w", err)
+	}
+	if err := chromedp.Do(tabCtx, chromedp.SetValue("#plotTypes-selector", "Dieoff")); err != nil {
+		return fmt.Errorf("failed to select Dieoff: %w", err)
 	}
 
 	time.Sleep(600 * time.Millisecond)

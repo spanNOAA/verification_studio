@@ -19,11 +19,27 @@ import (
 // Client fetches observation maps from NOAA NSSL MRMS Product Viewer.
 type Client struct {
 	session *browser.Session
+	logger  func(string)
 }
 
 // NewClient creates an MRMS fetcher client with a browser session.
 func NewClient(session *browser.Session) *Client {
 	return &Client{session: session}
+}
+
+// SetLogger configures an optional real-time logging sink for operational messages.
+func (c *Client) SetLogger(fn func(string)) {
+	c.logger = fn
+}
+
+// Log outputs a formatted operational message to the registered logger or standard output.
+func (c *Client) Log(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if c.logger != nil {
+		c.logger(msg)
+	} else {
+		fmt.Print(msg)
+	}
 }
 
 // FetchRadarImages retrieves observed composite reflectivity maps with dBZ legends for the cases.
@@ -56,14 +72,14 @@ func (c *Client) FetchRadarImages(
 			if onProgress != nil {
 				onProgress(int(100*float64(currentIdx)/float64(totalCases)), fmt.Sprintf("Using cached %s", mrmsFn))
 			}
-			fmt.Printf("  [CACHE HIT] Using cached: %s\n", mrmsFn)
+			c.Log("  [CACHE HIT] Using cached: %s\n", mrmsFn)
 		} else {
 			needed = append(needed, cs)
 		}
 	}
 
 	if len(needed) == 0 {
-		fmt.Printf("  [ALL CACHED] All MRMS observation radar images already available locally.\n")
+		c.Log("  [ALL CACHED] All MRMS observation radar images already available locally.\n")
 		if onProgress != nil {
 			onProgress(100, "Done")
 		}
@@ -80,7 +96,7 @@ func (c *Client) FetchRadarImages(
 		}
 
 		if err := c.fetchSingleMRMS(cs, targetPath); err != nil {
-			fmt.Printf("    [WARNING] Error fetching MRMS %s: %v\n", mrmsFn, err)
+			c.Log("    [MRMS WARNING] Error fetching MRMS %s: %v\n", mrmsFn, err)
 		}
 	}
 
@@ -98,7 +114,7 @@ type rectBox struct {
 }
 
 func (c *Client) fetchSingleMRMS(cs hpc.RadarCase, targetPath string) error {
-	tabCtx, cancel := c.session.NewTab(45 * time.Second)
+	tabCtx, cancel := c.session.NewTab(25 * time.Second)
 	defer cancel()
 
 	// Parse date/time
@@ -121,7 +137,7 @@ func (c *Client) fetchSingleMRMS(cs hpc.RadarCase, targetPath string) error {
 		y, m, d, h, mn,
 	)
 
-	fmt.Printf("  • Fetching MRMS for %s (Valid: %s UTC)...\n", cs.Title, validDt.Format("2006-01-02 15:04"))
+	c.Log("  * Fetching MRMS for %s (Valid: %s UTC)...\n", cs.Title, validDt.Format("2006-01-02 15:04"))
 
 	if err := chromedp.Do(tabCtx,
 		chromedp.Navigate(url),
@@ -184,7 +200,7 @@ func (c *Client) fetchSingleMRMS(cs hpc.RadarCase, targetPath string) error {
 		return err
 	}
 
-	fmt.Printf("    [CACHE MISS] Downloaded fresh MRMS observation: %s (%d bytes)\n", filepath.Base(targetPath), len(buf))
+	c.Log("    [CACHE MISS] Downloaded fresh MRMS observation: %s (%d bytes)\n", filepath.Base(targetPath), len(buf))
 	return nil
 }
 

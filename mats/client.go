@@ -4,20 +4,29 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chromedp/chromedp"
 	"verification_studio/browser"
 )
 
+var (
+	ErrRateLimited  = errors.New("rate limited by Cloudflare/gateway")
+	ErrPageNotFound = errors.New("page returned HTTP 404 Not Found")
+)
+
 // Client handles automated interaction with NOAA GSL MATS web applications.
 type Client struct {
-	session *browser.Session
-	logger  func(string)
+	session       *browser.Session
+	logger        func(string)
+	mu            sync.Mutex
+	cooldownCount int
 }
 
 // NewClient initializes a MATS automation client with a browser session.
@@ -40,6 +49,104 @@ func (c *Client) Log(format string, args ...any) {
 	}
 }
 
+// OpenMATSPage navigates to a MATS page and verifies the UI initializes cleanly.
+// It fails fast if the page returns HTTP 404 or a Cloudflare challenge.
+func (c *Client) OpenMATSPage(ctx context.Context, pageURL string) error {
+	if err := chromedp.Do(ctx, chromedp.Navigate(pageURL)); err != nil {
+		return fmt.Errorf("failed to navigate to %s: %w", pageURL, err)
+	}
+
+	checkScript := `(() => {
+		if (document.querySelector("#plotTypes-selector")) {
+			return "ready";
+		}
+		const bodyText = (document.body ? document.body.innerText : "") || "";
+		const title = document.title || "";
+		if (bodyText.includes("404 page not found") || title.includes("404 Not Found") || bodyText.includes("404 Not Found")) {
+			return "404";
+		}
+		if (title.includes("Just a moment...") || title.includes("Attention Required!") || bodyText.includes("Cloudflare")) {
+			return "cloudflare";
+		}
+		return "loading";
+	})()`
+
+	start := time.Now()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		status, err := chromedp.Run(ctx, chromedp.Evaluate[string](checkScript))
+		if err == nil {
+			switch status {
+			case "ready":
+				return nil
+			case "404":
+				return ErrPageNotFound
+			case "cloudflare":
+				return ErrRateLimited
+			}
+		}
+
+		if time.Since(start) > 25*time.Second {
+			return fmt.Errorf("timed out waiting for MATS page controls to initialize")
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+func isRateLimited(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrRateLimited) {
+		return true
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "rate limited") || strings.Contains(s, "cloudflare") || strings.Contains(s, "429")
+}
+
+// CooldownAndRestart gracefully terminates the active browser session, sleeps for the specified duration
+// while emitting real-time countdown notifications, and re-allocates a fresh browser session.
+func (c *Client) CooldownAndRestart(ctx context.Context, duration time.Duration) error {
+	c.mu.Lock()
+	if c.cooldownCount >= 2 {
+		c.mu.Unlock()
+		c.Log("  [COOLDOWN NOTICE] Maximum rate limit cooldown attempts reached (%d). Skipping further pauses.\n", c.cooldownCount)
+		return nil
+	}
+	c.cooldownCount++
+	c.mu.Unlock()
+
+	c.Log("\n[RATE LIMIT COOLDOWN] [!] Detected NOAA GSL / Cloudflare traffic throttling. Cooling down for %v...\n", duration)
+	_ = c.session.Close()
+
+	totalSec := int(duration.Seconds())
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	start := time.Now()
+	for {
+		elapsed := int(time.Since(start).Seconds())
+		remaining := totalSec - elapsed
+		if remaining <= 0 {
+			break
+		}
+		c.Log("  [COOLDOWN] Remaining cooldown time: %ds...\n", remaining)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+
+	c.Log("  [COOLDOWN] [OK] Cooldown completed. Re-initializing fresh browser session...\n\n")
+	return c.session.Restart(ctx)
+}
+
 // RetryFetch executes a fetch action with automatic retry and backoff on transient network or timeout failures.
 func (c *Client) RetryFetch(tag string, maxAttempts int, backoff time.Duration, fn func() error) error {
 	var err error
@@ -48,9 +155,20 @@ func (c *Client) RetryFetch(tag string, maxAttempts int, backoff time.Duration, 
 		if err == nil {
 			return nil
 		}
+		if errors.Is(err, ErrPageNotFound) {
+			// Permanent 404, no need to retry
+			return err
+		}
 		if attempt < maxAttempts {
-			c.Log("  [RETRY] %s encountered error (%v). Retrying in %v (attempt %d/%d)...\n", tag, err, backoff, attempt, maxAttempts)
-			time.Sleep(backoff)
+			if isRateLimited(err) {
+				c.Log("  [RATE LIMIT] %s hit traffic throttling. Entering 3-minute cooldown...\n", tag)
+				if cdErr := c.CooldownAndRestart(context.Background(), 3*time.Minute); cdErr != nil {
+					c.Log("  [COOLDOWN ERROR] Failed to restart browser: %v\n", cdErr)
+				}
+			} else {
+				c.Log("  [RETRY] %s encountered error (%v). Retrying in %v (attempt %d/%d)...\n", tag, err, backoff, attempt, maxAttempts)
+				time.Sleep(backoff)
+			}
 		}
 	}
 	return err
@@ -58,10 +176,7 @@ func (c *Client) RetryFetch(tag string, maxAttempts int, backoff time.Duration, 
 
 // CheckAvailableModels navigates to a MATS page and verifies which models exist in the data-source dropdown.
 func (c *Client) CheckAvailableModels(ctx context.Context, pageURL string, models []Model, opts ...CheckOptions) ([]Model, error) {
-	if err := chromedp.Do(ctx,
-		chromedp.Navigate(pageURL),
-		chromedp.WaitVisible("#plotTypes-selector"),
-	); err != nil {
+	if err := c.OpenMATSPage(ctx, pageURL); err != nil {
 		return nil, fmt.Errorf("failed to open MATS page %s: %w", pageURL, err)
 	}
 

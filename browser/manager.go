@@ -13,6 +13,8 @@ import (
 type Session struct {
 	mu            sync.Mutex
 	Info          *BrowserInfo
+	parentCtx     context.Context
+	headless      bool
 	allocCtx      context.Context
 	cancelAlloc   context.CancelFunc
 	browserCtx    context.Context
@@ -44,6 +46,8 @@ func NewSession(parentCtx context.Context, headless bool) (*Session, error) {
 
 	return &Session{
 		Info:          info,
+		parentCtx:     parentCtx,
+		headless:      headless,
 		allocCtx:      allocCtx,
 		cancelAlloc:   cancelAlloc,
 		browserCtx:    browserCtx,
@@ -91,5 +95,42 @@ func (s *Session) Close() error {
 	if s.cancelAlloc != nil {
 		s.cancelAlloc()
 	}
+	return nil
+}
+
+// Restart cleanly terminates the existing browser process and allocates a fresh browser session.
+func (s *Session) Restart(parentCtx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.cancelBrowser != nil {
+		s.cancelBrowser()
+	}
+	if s.cancelAlloc != nil {
+		s.cancelAlloc()
+	}
+
+	if parentCtx == nil {
+		parentCtx = s.parentCtx
+	}
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+
+	opts := DefaultExecAllocatorOptions(s.Info.Path, s.headless)
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(parentCtx, opts...)
+	browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
+
+	if err := chromedp.Do(browserCtx); err != nil {
+		cancelBrowser()
+		cancelAlloc()
+		return fmt.Errorf("failed to re-initialize browser session: %w", err)
+	}
+
+	s.allocCtx = allocCtx
+	s.cancelAlloc = cancelAlloc
+	s.browserCtx = browserCtx
+	s.cancelBrowser = cancelBrowser
+	s.closed = false
 	return nil
 }

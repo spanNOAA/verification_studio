@@ -130,12 +130,11 @@ func (c *Client) fetchSingleSurfaceTimeSeries(
 	tabCtx, cancel := c.session.NewTab(75 * time.Second)
 	defer cancel()
 
-	if err := chromedp.Do(tabCtx,
-		chromedp.Navigate("https://gsl.noaa.gov/mats/surface"),
-		chromedp.WaitVisible("#plotTypes-selector"),
-		chromedp.SetValue("#plotTypes-selector", "TimeSeries"),
-	); err != nil {
-		return fmt.Errorf("failed to open and select TimeSeries: %w", err)
+	if err := c.OpenMATSPage(tabCtx, "https://gsl.noaa.gov/mats/surface"); err != nil {
+		return fmt.Errorf("failed to open MATS surface page: %w", err)
+	}
+	if err := chromedp.Do(tabCtx, chromedp.SetValue("#plotTypes-selector", "TimeSeries")); err != nil {
+		return fmt.Errorf("failed to select TimeSeries: %w", err)
 	}
 
 	time.Sleep(600 * time.Millisecond)

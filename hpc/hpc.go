@@ -170,7 +170,15 @@ func DownloadRadarImages(
 	cases []RadarCase,
 	forceFetch bool,
 	onProgress func(percent int, msg string),
+	logger ...func(string),
 ) error {
+	var logMsg func(string)
+	if len(logger) > 0 && logger[0] != nil {
+		logMsg = logger[0]
+	} else {
+		logMsg = func(s string) { fmt.Print(s) }
+	}
+
 	if len(cases) == 0 {
 		if onProgress != nil {
 			onProgress(100, "Done")
@@ -216,21 +224,21 @@ func DownloadRadarImages(
 				if onProgress != nil {
 					onProgress(int(100*float64(currentItem)/float64(totalItems)), fmt.Sprintf("Using cached %s", localFilename))
 				}
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", localFilename)
+				logMsg(fmt.Sprintf("  [CACHE HIT] Using cached: %s\n", localFilename))
 			} else {
 				needed = append(needed, c)
 			}
 		}
 
 		if len(needed) == 0 {
-			fmt.Printf("  [ALL CACHED] All radar images for [%s] already available in local cache.\n", shortName)
+			logMsg(fmt.Sprintf("  [ALL CACHED] All radar images for [%s] already available in local cache.\n", shortName))
 			continue
 		}
 
 		if isRemote {
 			if !IsOnline(cluster) {
 				if !EnsureConnection(cluster, models) || !IsOnline(cluster) {
-					fmt.Printf("  [NOTICE] HPC cluster '%s' is offline. Skipping remote radar retrieval for [%s].\n", cluster, shortName)
+					logMsg(fmt.Sprintf("  [HPC NOTICE] Cluster '%s' is offline. Skipping remote radar retrieval for [%s].\n", cluster, shortName))
 					currentItem += len(needed)
 					if onProgress != nil {
 						onProgress(int(100*float64(currentItem)/float64(totalItems)), fmt.Sprintf("Cluster %s offline", cluster))
@@ -268,7 +276,7 @@ func DownloadRadarImages(
 						rawBytes, bErr := base64.StdEncoding.DecodeString(strings.TrimSpace(out))
 						if bErr == nil && len(rawBytes) > 1000 {
 							if n, wErr := SafeAtomicWrite(rawBytes, localPath); wErr == nil {
-								fmt.Printf("  [CACHE MISS] Downloaded fresh image: %s from %s (%d bytes)\n", localFilename, cluster, n)
+								logMsg(fmt.Sprintf("  [CACHE MISS] Downloaded fresh image: %s from %s (%d bytes)\n", localFilename, cluster, n))
 								downloaded = true
 								break
 							}
@@ -276,21 +284,21 @@ func DownloadRadarImages(
 					}
 				}
 				if !downloaded {
-					fmt.Printf("  [NOTICE] No remote radar image found for %s on %s:%s\n", localFilename, cluster, basePath)
+					logMsg(fmt.Sprintf("  [HPC NOTICE] No remote radar image found for %s on %s:%s\n", localFilename, cluster, basePath))
 				}
 			} else {
 				found := false
 				for _, cand := range candidates {
 					if isFileValid(cand) {
 						if err := copyFile(cand, localPath); err == nil {
-							fmt.Printf("  [CACHE MISS] Copied fresh image: %s from local %s\n", localFilename, cand)
+							logMsg(fmt.Sprintf("  [CACHE MISS] Copied fresh image: %s from local %s\n", localFilename, cand))
 							found = true
 							break
 						}
 					}
 				}
 				if !found {
-					fmt.Printf("  [NOTICE] Local image not found: %s\n", localFilename)
+					logMsg(fmt.Sprintf("  [LOCAL NOTICE] Local image not found: %s\n", localFilename))
 				}
 			}
 		}
