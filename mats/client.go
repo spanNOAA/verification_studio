@@ -23,15 +23,22 @@ var (
 
 // Client handles automated interaction with NOAA GSL MATS web applications.
 type Client struct {
-	session       *browser.Session
-	logger        func(string)
-	mu            sync.Mutex
-	cooldownCount int
+	session              *browser.Session
+	logger               func(string)
+	mu                   sync.Mutex
+	consecutiveCooldowns int
 }
 
 // NewClient initializes a MATS automation client with a browser session.
 func NewClient(session *browser.Session) *Client {
 	return &Client{session: session}
+}
+
+// ResetCooldowns clears the consecutive cooldown counter upon a successful fetch.
+func (c *Client) ResetCooldowns() {
+	c.mu.Lock()
+	c.consecutiveCooldowns = 0
+	c.mu.Unlock()
 }
 
 // SetLogger configures an optional real-time logging sink for operational messages.
@@ -50,9 +57,15 @@ func (c *Client) Log(format string, args ...any) {
 }
 
 // OpenMATSPage navigates to a MATS page and verifies the UI initializes cleanly.
-// It fails fast if the page returns HTTP 404 or a Cloudflare challenge.
+// It fails fast if the page returns HTTP 404, hangs, or encounters a Cloudflare challenge.
 func (c *Client) OpenMATSPage(ctx context.Context, pageURL string) error {
-	if err := chromedp.Do(ctx, chromedp.Navigate(pageURL)); err != nil {
+	navCtx, navCancel := context.WithTimeout(ctx, 25*time.Second)
+	defer navCancel()
+
+	if err := chromedp.Do(navCtx, chromedp.Navigate(pageURL)); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "deadline exceeded") {
+			return fmt.Errorf("%w: failed to navigate to %s within 25s: %v", ErrRateLimited, pageURL, err)
+		}
 		return fmt.Errorf("failed to navigate to %s: %w", pageURL, err)
 	}
 
@@ -92,7 +105,7 @@ func (c *Client) OpenMATSPage(ctx context.Context, pageURL string) error {
 		}
 
 		if time.Since(start) > 25*time.Second {
-			return fmt.Errorf("timed out waiting for MATS page controls to initialize")
+			return fmt.Errorf("%w: timed out waiting for MATS page controls to initialize", ErrRateLimited)
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
@@ -102,26 +115,36 @@ func isRateLimited(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, ErrRateLimited) {
+	if errors.Is(err, ErrRateLimited) || errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
 	s := strings.ToLower(err.Error())
-	return strings.Contains(s, "rate limited") || strings.Contains(s, "cloudflare") || strings.Contains(s, "429")
+	return strings.Contains(s, "rate limited") ||
+		strings.Contains(s, "cloudflare") ||
+		strings.Contains(s, "429") ||
+		strings.Contains(s, "deadline exceeded") ||
+		strings.Contains(s, "timed out") ||
+		strings.Contains(s, "timeout") ||
+		strings.Contains(s, "connection reset") ||
+		strings.Contains(s, "connection refused") ||
+		strings.Contains(s, "err_timed_out") ||
+		strings.Contains(s, "err_connection_timed_out") ||
+		strings.Contains(s, "err_connection_reset")
 }
 
 // CooldownAndRestart gracefully terminates the active browser session, sleeps for the specified duration
 // while emitting real-time countdown notifications, and re-allocates a fresh browser session.
 func (c *Client) CooldownAndRestart(ctx context.Context, duration time.Duration) error {
 	c.mu.Lock()
-	if c.cooldownCount >= 2 {
+	if c.consecutiveCooldowns >= 4 {
 		c.mu.Unlock()
-		c.Log("  [COOLDOWN NOTICE] Maximum rate limit cooldown attempts reached (%d). Skipping further pauses.\n", c.cooldownCount)
+		c.Log("  [COOLDOWN NOTICE] Maximum consecutive rate limit cooldowns reached (%d). Skipping further pauses.\n", c.consecutiveCooldowns)
 		return nil
 	}
-	c.cooldownCount++
+	c.consecutiveCooldowns++
 	c.mu.Unlock()
 
-	c.Log("\n[RATE LIMIT COOLDOWN] [!] Detected NOAA GSL / Cloudflare traffic throttling. Cooling down for %v...\n", duration)
+	c.Log("\n[RATE LIMIT COOLDOWN] [!] Detected NOAA GSL traffic throttling / timeout. Cooling down for %v...\n", duration)
 	_ = c.session.Close()
 
 	totalSec := int(duration.Seconds())
@@ -153,6 +176,7 @@ func (c *Client) RetryFetch(tag string, maxAttempts int, backoff time.Duration, 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		err = fn()
 		if err == nil {
+			c.ResetCooldowns()
 			return nil
 		}
 		if errors.Is(err, ErrPageNotFound) {
@@ -161,7 +185,7 @@ func (c *Client) RetryFetch(tag string, maxAttempts int, backoff time.Duration, 
 		}
 		if attempt < maxAttempts {
 			if isRateLimited(err) {
-				c.Log("  [RATE LIMIT] %s hit traffic throttling. Entering 3-minute cooldown...\n", tag)
+				c.Log("  [RATE LIMIT] %s hit traffic throttling / timeout (%v). Entering 3-minute cooldown...\n", tag, err)
 				if cdErr := c.CooldownAndRestart(context.Background(), 3*time.Minute); cdErr != nil {
 					c.Log("  [COOLDOWN ERROR] Failed to restart browser: %v\n", cdErr)
 				}
@@ -176,8 +200,19 @@ func (c *Client) RetryFetch(tag string, maxAttempts int, backoff time.Duration, 
 
 // CheckAvailableModels navigates to a MATS page and verifies which models exist in the data-source dropdown.
 func (c *Client) CheckAvailableModels(ctx context.Context, pageURL string, models []Model, opts ...CheckOptions) ([]Model, error) {
-	if err := c.OpenMATSPage(ctx, pageURL); err != nil {
-		return nil, fmt.Errorf("failed to open MATS page %s: %w", pageURL, err)
+	var openErr error
+	for attempt := 1; attempt <= 2; attempt++ {
+		openErr = c.OpenMATSPage(ctx, pageURL)
+		if openErr == nil {
+			break
+		}
+		if attempt < 2 && isRateLimited(openErr) {
+			c.Log("  [RATE LIMIT] Pre-check for %s hit traffic throttling (%v). Entering 3-minute cooldown...\n", pageURL, openErr)
+			_ = c.CooldownAndRestart(context.Background(), 3*time.Minute)
+		}
+	}
+	if openErr != nil {
+		return nil, fmt.Errorf("failed to open MATS page %s: %w", pageURL, openErr)
 	}
 
 	time.Sleep(1500 * time.Millisecond)
