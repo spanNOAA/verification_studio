@@ -198,6 +198,11 @@ func ParseRadarCases(raw json.RawMessage) []hpc.RadarCase {
 // Run executes the complete verification workflow in pure Go.
 func Run(ctx context.Context, req Request, logFn func(string)) error {
 	startTime := time.Now()
+	defer func() {
+		// Automatically disconnect and terminate background HPC session daemons
+		hpc.DisconnectAll()
+	}()
+
 	log := func(format string, args ...any) {
 		msg := fmt.Sprintf(format, args...)
 		if logFn != nil {

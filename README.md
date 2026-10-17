@@ -144,12 +144,34 @@ Execute with a single command:
 
 ---
 
-## 🔒 5. HPC Remote Integration (`hpc-tools`)
+## 🔒 5. Native Pure Go HPC Integration (`RO-v1` Engine)
 
-Verification Studio incorporates `hpc-run` for secure remote access to NOAA supercomputers:
-- **Supported Clusters**: NOAA RDHPCS Gaea (`gaeac5`, `gaeac6`, `gaeac7`), Hera (`hera`), Ursa (`ursa`), and partners (MSU `orion`, `hercules`).
-- **Read-Only Security**: Strict minimal API (list, stat, download). Arbitrary commands, write, and job submissions are structurally prohibited.
-- **YubiKey / SmartCard Support**: If an HPC session is offline, the studio prompts for one-time interactive PIN + YubiKey authentication in a dedicated terminal window.
+Verification Studio includes a **built-in, native Pure Go HPC read-only engine** for secure, self-contained remote access to NOAA supercomputers with zero external dependencies:
+
+- **Supported Supercomputers**: NOAA RDHPCS Gaea (`gaea-c5`, `gaea-c6`, `gaea-c7`), Hera (`hera`), Ursa (`ursa`), and university partners (MSU `orion`, `hercules`).
+- **Zero Python / Zero Dependencies**: Fully implemented in pure Go. Remote radar retrieval works out-of-the-box on distributed systems without requiring Python, scripts, or package installations.
+- **Strict Read-Only Security Compliance (RO-v1)**:
+  - Strict capability whitelist: only `list`, `stat`, and `download` operations are structurally permitted.
+  - Arbitrary remote shell command execution, file writing, modification, deletion, and batch job submissions (`sbatch`, `qsub`) are permanently blocked by the protocol daemon.
+  - Local Unix domain sockets operate under strict `0600` permissions with peer process UID verification.
+  - Safe atomic file replacement with symlink traversal protection and 50 MB download payload limits.
+- **Zero-Config Fallback**:
+  - Automatically resolves hostnames to official Canonical FQDNs if `~/.ssh/config` is unconfigured.
+  - Prompts for interactive username confirmation with candidate default, persisting confirmed credentials to `~/.hpc_user_<cluster>`.
+- **Automatic Session Teardown**:
+  - Background HPC session tunnels automatically disconnect and clean up socket files upon verification report completion, preventing persistent lingering connections.
+- **Built-in CLI Commands**:
+  ```bash
+  # Check cluster connection status
+  ./verification_studio hpc-run --status
+
+  # Authenticate PIN + YubiKey interactively
+  ./verification_studio hpc-auth gaea-c6
+
+  # Standalone read-only operations
+  ./verification_studio hpc-run gaea-c6 list /gpfs/f6/scratch1
+  ./verification_studio hpc-run gaea-c6 download /path/to/cref.png ./local.png
+  ```
 
 ---
 

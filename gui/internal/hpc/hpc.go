@@ -1,28 +1,17 @@
 package hpc
 
 import (
-	"bytes"
-	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	"verification_studio/internal/mats"
 )
-
-// RadarCase defines a severe convective weather case study for synoptic radar comparison.
-type RadarCase struct {
-	Index string `json:"index"`
-	Date  string `json:"date"`
-	Cycle string `json:"cycle"`
-	Fhr   int    `json:"fhr"`
-	Title string `json:"title"`
-}
 
 // ValidClusters lists all recognized NOAA & partner HPC clusters.
 var ValidClusters = map[string]bool{
@@ -34,18 +23,6 @@ var ValidClusters = map[string]bool{
 	"ursa":     true,
 	"orion":    true,
 	"hercules": true,
-}
-
-var clusterAliasMap = map[string]string{
-	"gaeac5":  "gaea-c5",
-	"gaeac6":  "gaea-c6",
-	"gaeac7":  "gaea-c7",
-	"gaea-c5": "gaea-c5",
-	"gaea-c6": "gaea-c6",
-	"gaea-c7": "gaea-c7",
-	"c5":      "gaea-c5",
-	"c6":      "gaea-c6",
-	"c7":      "gaea-c7",
 }
 
 // NormalizeCluster maps cluster aliases or infers cluster from base filesystem paths.
@@ -68,7 +45,7 @@ func NormalizeCluster(cluster, path string) string {
 	}
 
 	c := strings.ToLower(strings.TrimSpace(cluster))
-	if canon, ok := clusterAliasMap[c]; ok {
+	if canon, ok := ClusterAliases[c]; ok {
 		return canon
 	}
 	if c == "gaea" {
@@ -84,11 +61,19 @@ func NormalizeCluster(cluster, path string) string {
 	return c
 }
 
-// LocateHpcRun locates the hpc-run executable on the system.
+// LocateHpcRun locates an hpc-run executable if available in custom path or environment.
 func LocateHpcRun() string {
 	if env := os.Getenv("HPC_RUN_BIN"); env != "" {
 		if fi, err := os.Stat(env); err == nil && !fi.IsDir() {
 			return env
+		}
+	}
+
+	// Check beside current executable
+	if exe, err := os.Executable(); err == nil {
+		appBin := filepath.Join(filepath.Dir(exe), "hpc-run")
+		if fi, err := os.Stat(appBin); err == nil && !fi.IsDir() {
+			return appBin
 		}
 	}
 
@@ -109,23 +94,15 @@ func LocateHpcRun() string {
 	return "hpc-run"
 }
 
-// IsOnline checks whether the cluster daemon is currently online.
+// IsOnline checks whether the cluster daemon is currently online via in-process socket ping.
 func IsOnline(cluster string) bool {
-	hpcBin := LocateHpcRun()
 	target := NormalizeCluster(cluster, "")
 	if target == "gaea" {
 		target = "gaea-c5"
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, hpcBin, "--status", target)
-	out, err := cmd.Output()
-	if err == nil && strings.Contains(string(out), "ONLINE") {
-		return true
-	}
-	return false
+	online, _ := CheckStatus(target)
+	return online
 }
 
 // EnsureConnection checks if target cluster is online. If offline, prompts the user via a terminal script.
@@ -144,7 +121,6 @@ func EnsureConnection(cluster string, models []mats.Model) bool {
 		return true
 	}
 
-	hpcBin := LocateHpcRun()
 	suggestedUser := findSuggestedUser(target, models)
 
 	fmt.Printf("\n[HPC] Cluster '%s' is offline or requires authentication.\n", target)
@@ -156,34 +132,21 @@ func EnsureConnection(cluster string, models []mats.Model) bool {
 	}
 	defer os.RemoveAll(authTempDir)
 
-	statusFile := filepath.Join(authTempDir, "auth.status")
 	cmdFile := filepath.Join(authTempDir, "auth.command")
 	ttyFile := filepath.Join(authTempDir, "auth.tty")
 
-	targetEnvSuffix := strings.ToUpper(strings.ReplaceAll(target, "-", "_"))
+	selfExe, err := os.Executable()
+	if err != nil {
+		selfExe = os.Args[0]
+	}
 
 	scriptContent := fmt.Sprintf(`#!/bin/bash
-unset PYTHONHOME
-unset PYTHONPATH
 CURRENT_TTY=$(tty)
 echo "$CURRENT_TTY" > %q
 printf "\033]0;MATS_HPC_AUTH_%s\007"
 
-echo "========================================================"
-echo " NOAA GSL Verification Studio"
-echo " HPC Authentication for [%s]"
-echo "========================================================"
-echo ""
-
-SUGGESTED_USER=%q
-if [ -n "$SUGGESTED_USER" ]; then
-    export HPC_%s_USER="$SUGGESTED_USER"
-    export HPC_USER="$SUGGESTED_USER"
-fi
-
-%q --start %q
+%q hpc-auth %q --user %q
 STATUS=$?
-echo "$STATUS" > %q
 
 if [ $STATUS -eq 0 ]; then
     echo ""
@@ -216,7 +179,7 @@ else
     read -p "Press [Enter] to close..."
     exit $STATUS
 fi
-`, ttyFile, strings.ToUpper(target), strings.ToUpper(target), suggestedUser, targetEnvSuffix, hpcBin, target, statusFile)
+`, ttyFile, strings.ToUpper(target), selfExe, target, suggestedUser)
 
 	if err := os.WriteFile(cmdFile, []byte(scriptContent), 0o700); err != nil {
 		return false
@@ -225,23 +188,16 @@ fi
 	_ = exec.Command("open", "-a", "Terminal", cmdFile).Run()
 
 	t0 := time.Now()
-	for time.Since(t0) < 60*time.Second {
-		if data, err := os.ReadFile(statusFile); err == nil {
-			st := strings.TrimSpace(string(data))
-			if st == "0" {
-				fmt.Printf("[HPC] >>> Successfully connected to %s!\n", target)
-				closeTerminalByTTY(ttyFile)
-				return true
-			} else if st != "" {
-				fmt.Printf("[HPC] Authentication failed with status %s.\n", st)
-				closeTerminalByTTY(ttyFile)
-				return false
-			}
+	for time.Since(t0) < 90*time.Second {
+		if IsOnline(target) {
+			fmt.Printf("[HPC] >>> Successfully connected to %s!\n", target)
+			closeTerminalByTTY(ttyFile)
+			return true
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	fmt.Printf("[HPC] Authentication timed out after 60s.\n")
+	fmt.Printf("[HPC] Authentication timed out after 90s.\n")
 	closeTerminalByTTY(ttyFile)
 	return false
 }
@@ -275,36 +231,15 @@ func closeTerminalByTTY(ttyFile string) {
 }
 
 func findSuggestedUser(target string, models []mats.Model) string {
-	clusterEnv := strings.ToUpper(strings.ReplaceAll(target, "-", "_"))
-	if u := os.Getenv(fmt.Sprintf("HPC_%s_USER", clusterEnv)); u != "" {
-		return strings.TrimSpace(u)
-	}
-	if u := os.Getenv("HPC_USER"); u != "" {
-		return strings.TrimSpace(u)
-	}
-
-	home, _ := os.UserHomeDir()
-	if home != "" {
-		for _, fn := range []string{fmt.Sprintf(".hpc_user_%s", target), ".hpc_user"} {
-			if data, err := os.ReadFile(filepath.Join(home, fn)); err == nil {
-				if u := strings.TrimSpace(string(data)); u != "" {
-					return u
-				}
-			}
-		}
-	}
-
 	for _, m := range models {
-		path := m.Path
-		mCluster := m.Cluster
-		if strings.Contains(mCluster, target) || (strings.HasPrefix(target, "gaea") && strings.HasPrefix(mCluster, "gaea")) {
-			re := regexp.MustCompile(`/scratch/([^/]+)/`)
-			if matches := re.FindStringSubmatch(path); len(matches) > 1 {
-				return matches[1]
+		mCluster := NormalizeCluster(m.Cluster, m.Path)
+		if mCluster == target {
+			if u := ResolveCandidateUser(target, m.Path); u != "" {
+				return u
 			}
 		}
 	}
-	return ""
+	return ResolveCandidateUser(target, "")
 }
 
 // DownloadRadarImages checks evaluated models for remote HPC or local paths and downloads cref images.
@@ -340,7 +275,6 @@ func DownloadRadarImages(
 		return nil
 	}
 
-	hpcBin := LocateHpcRun()
 	totalItems := len(modelsWithPath) * len(cases)
 	currentItem := 0
 
@@ -408,19 +342,16 @@ func DownloadRadarImages(
 			if isRemote {
 				downloaded := false
 				for _, cand := range candidates {
-					ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-					cmd := exec.CommandContext(ctx, hpcBin, cluster, "download", cand, localPath)
-					cmd.Env = append(os.Environ(), "HPC_NON_INTERACTIVE=1")
-					var errBuf bytes.Buffer
-					cmd.Stderr = &errBuf
-					err := cmd.Run()
-					cancel()
-
-					if err == nil && isFileValid(localPath) {
-						fi, _ := os.Stat(localPath)
-						fmt.Printf("  [CACHE MISS] Downloaded fresh image: %s from %s (%d bytes)\n", localFilename, cluster, fi.Size())
-						downloaded = true
-						break
+					code, out, err := ClientSend(cluster, OpDownload, cand)
+					if err == nil && code == 0 && out != "" {
+						rawBytes, bErr := base64.StdEncoding.DecodeString(strings.TrimSpace(out))
+						if bErr == nil && len(rawBytes) > 1000 {
+							if n, wErr := SafeAtomicWrite(rawBytes, localPath); wErr == nil {
+								fmt.Printf("  [CACHE MISS] Downloaded fresh image: %s from %s (%d bytes)\n", localFilename, cluster, n)
+								downloaded = true
+								break
+							}
+						}
 					}
 				}
 				if !downloaded {
