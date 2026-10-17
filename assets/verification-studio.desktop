@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Verification Studio
+Comment=NOAA GSL Numerical Weather Prediction Verification Studio
+Exec=verification-studio
+Icon=verification-studio
+Terminal=false
+Type=Application
+Categories=Science;Education;Meteorology;Development;
+StartupNotify=true

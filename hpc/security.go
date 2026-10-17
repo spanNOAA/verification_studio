@@ -4,12 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
-	"unsafe"
 )
 
 // SanitizeRemotePath validates that remote path contains no PTY control characters or linebreaks.
@@ -83,54 +80,4 @@ func SafeAtomicWrite(data []byte, localPath string) (int, error) {
 	}
 
 	return len(data), nil
-}
-
-// VerifyPeerUID checks if the Unix socket peer process matches the current process UID.
-func VerifyPeerUID(conn net.Conn) bool {
-	unixConn, ok := conn.(*net.UnixConn)
-	if !ok {
-		return false
-	}
-
-	rawConn, err := unixConn.SyscallConn()
-	if err != nil {
-		return true // Fallback to POSIX 0600 file mode permissions
-	}
-
-	var peerUID uint32
-	var credsFound bool
-
-	_ = rawConn.Control(func(fd uintptr) {
-		// Darwin LOCAL_PEERCRED inspection (SOL_LOCAL = 0, LOCAL_PEERCRED = 0x001)
-		type xucred struct {
-			Version uint32
-			Type    uint32
-			NumUIDs int16
-			UID     uint32
-			GIDs    [16]uint32
-		}
-
-		var cred xucred
-		var size = uint32(unsafe.Sizeof(cred))
-		_, _, errno := syscall.Syscall6(
-			syscall.SYS_GETSOCKOPT,
-			fd,
-			0, // SOL_LOCAL
-			1, // LOCAL_PEERCRED
-			uintptr(unsafe.Pointer(&cred)),
-			uintptr(unsafe.Pointer(&size)),
-			0,
-		)
-		if errno == 0 {
-			peerUID = cred.UID
-			credsFound = true
-		}
-	})
-
-	if credsFound {
-		return peerUID == uint32(os.Getuid())
-	}
-
-	// If peer credential inspection is unsupported by kernel/runtime, rely on POSIX 0600 socket mode
-	return true
 }

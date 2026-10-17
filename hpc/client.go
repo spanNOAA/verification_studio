@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -124,9 +123,9 @@ func StopDaemon(cluster string) error {
 	// Terminate process if still running
 	if pidData, err := os.ReadFile(pidPath); err == nil {
 		if pid, err := strconv.Atoi(strings.TrimSpace(string(pidData))); err == nil && pid > 0 {
-			_ = syscall.Kill(pid, syscall.SIGTERM)
-			time.Sleep(100 * time.Millisecond)
-			_ = syscall.Kill(pid, syscall.SIGKILL)
+			if proc, err := os.FindProcess(pid); err == nil {
+				_ = proc.Kill()
+			}
 		}
 	}
 

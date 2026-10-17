@@ -105,18 +105,36 @@ Verification Studio includes a **built-in, native Pure Go HPC read-only engine**
 
 ---
 
-## 📦 5. Building from Source
+## 📦 5. Multi-Platform Releases & Distribution
 
-To compile the universal macOS binary from source:
+Verification Studio packages and releases cross-platform standalone binaries automatically via GitHub Actions:
+
+| Platform | Format | Target Environments |
+| :--- | :--- | :--- |
+| **macOS** | **Universal DMG (`.dmg`)** | macOS 11.0+ (Apple Silicon `arm64` & Intel `x86_64`) |
+| **Linux (Debian/Ubuntu)** | **Debian Package (`.deb`)** | Ubuntu, Debian, Linux Mint |
+| **Linux (RedHat/Enterprise)** | **RPM Package (`.rpm`)** | RHEL, Rocky Linux, AlmaLinux, CentOS, Fedora |
+| **Windows (Portable)** | **Zip Archive (`.zip`)** | Windows 10 & 11 (64-bit, extract & run) |
+| **Windows (Standalone)** | **Executable (`.exe`)** | Windows 10 & 11 (64-bit) |
+
+---
+
+## 🛠️ 6. Local Development & Testing
+
+The codebase requires only standard Go toolchains (Go 1.22+):
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/spanNOAA/verification_studio.git
 cd verification_studio
 
-# 2. Build macOS Universal Binary (arm64 + x86_64)
-./build.sh
+# 2. Run automated test suite
+go test -v ./...
 
-# 3. Verify output
-./verification_studio --version
+# 3. Run application directly
+go run ./gui
+
+# 4. Compile local executable
+go build -o verification_studio ./gui
 ```
+

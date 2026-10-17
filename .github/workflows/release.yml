@@ -1,0 +1,217 @@
+name: Release Verification Studio
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v2.1.0)'
+        required: false
+        default: 'v2.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: Build macOS Universal DMG
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Compile Universal Mach-O Binary
+        run: |
+          mkdir -p build
+          echo "Compiling darwin/arm64..."
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o build/vs_arm64 ./gui
+
+          echo "Compiling darwin/amd64..."
+          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o build/vs_amd64 ./gui
+
+          echo "Merging into Universal binary..."
+          lipo -create -output build/verification_studio build/vs_arm64 build/vs_amd64
+          chmod +x build/verification_studio
+          codesign --force --sign - build/verification_studio
+
+      - name: Assemble Application Bundle & DMG
+        run: |
+          APP_NAME="Verification Studio.app"
+          mkdir -p "$APP_NAME/Contents/MacOS"
+          mkdir -p "$APP_NAME/Contents/Resources"
+
+          cp build/verification_studio "$APP_NAME/Contents/MacOS/verification_studio"
+          cp assets/Info.plist "$APP_NAME/Contents/Info.plist"
+          cp assets/AppIcon.icns "$APP_NAME/Contents/Resources/AppIcon.icns"
+
+          codesign --force --deep --sign - "$APP_NAME"
+
+          DMG_NAME="Verification_Studio_macOS_Universal.dmg"
+          rm -f "$DMG_NAME"
+          hdiutil create -volname "Verification Studio" -srcfolder "$APP_NAME" -ov -format UDZO "$DMG_NAME"
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: Verification_Studio_macOS_Universal.dmg
+
+  linux:
+    name: Build Linux .deb and .rpm
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev alien rpm
+
+      - name: Compile Linux Binary
+        run: |
+          mkdir -p build
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o build/verification-studio ./gui
+
+      - name: Package Debian (.deb)
+        run: |
+          RAW_VER="${{ github.ref_name }}"
+          if [ -z "$RAW_VER" ] || [ "$RAW_VER" = "main" ]; then
+            RAW_VER="${{ github.event.inputs.version }}"
+          fi
+          if [ -z "$RAW_VER" ]; then
+            RAW_VER="2.1.0"
+          fi
+          VER="${RAW_VER#v}"
+
+          DEB_ROOT="build/deb_pkg"
+          mkdir -p "$DEB_ROOT/DEBIAN"
+          mkdir -p "$DEB_ROOT/usr/bin"
+          mkdir -p "$DEB_ROOT/usr/share/applications"
+          mkdir -p "$DEB_ROOT/usr/share/icons/hicolor/1024x1024/apps"
+
+          cp build/verification-studio "$DEB_ROOT/usr/bin/"
+          cp assets/verification-studio.desktop "$DEB_ROOT/usr/share/applications/"
+          cp assets/verification-studio.png "$DEB_ROOT/usr/share/icons/hicolor/1024x1024/apps/"
+
+          cat <<EOF > "$DEB_ROOT/DEBIAN/control"
+Package: verification-studio
+Version: $VER
+Section: science
+Priority: optional
+Architecture: amd64
+Depends: libgtk-3-0, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
+Maintainer: NOAA GSL Verification Team
+Description: NOAA GSL Numerical Weather Prediction Verification Studio
+ Automated verification analysis and presentation generator for NWP models.
+EOF
+
+          dpkg-deb --build "$DEB_ROOT" "verification-studio_${VER}_amd64.deb"
+
+      - name: Package RedHat (.rpm)
+        run: |
+          RAW_VER="${{ github.ref_name }}"
+          if [ -z "$RAW_VER" ] || [ "$RAW_VER" = "main" ]; then
+            RAW_VER="${{ github.event.inputs.version }}"
+          fi
+          if [ -z "$RAW_VER" ]; then
+            RAW_VER="2.1.0"
+          fi
+          VER="${RAW_VER#v}"
+
+          # Convert .deb package to .rpm using alien
+          sudo alien -r --scripts "verification-studio_${VER}_amd64.deb"
+          RPM_FILE=$(ls verification-studio*.rpm | head -n 1)
+          TARGET_RPM="verification-studio-${VER}-1.x86_64.rpm"
+          if [ "$RPM_FILE" != "$TARGET_RPM" ]; then
+            mv "$RPM_FILE" "$TARGET_RPM"
+          fi
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            *.deb
+            *.rpm
+
+  windows:
+    name: Build Windows .exe and .zip
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Compile Windows Binary
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\msys64\mingw64\bin;" + $env:PATH
+          $env:CGO_ENABLED = "1"
+          New-Item -ItemType Directory -Force -Path build
+          go build -ldflags="-H windowsgui -s -w" -o build\VerificationStudio.exe .\gui
+
+      - name: Package Windows Artifacts
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build\VerificationStudio.exe, assets\verification-studio.png -DestinationPath Verification_Studio_Windows_x64.zip
+          Copy-Item build\VerificationStudio.exe -Destination Verification_Studio_Windows_x64.exe
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: |
+            Verification_Studio_Windows_x64.zip
+            Verification_Studio_Windows_x64.exe
+
+  publish:
+    name: Publish Release Assets
+    needs: [macos, linux, windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download macOS Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist
+
+      - name: Download Linux Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: dist
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-packages
+          path: dist
+
+      - name: Publish Release to GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true

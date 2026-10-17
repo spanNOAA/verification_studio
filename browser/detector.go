@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/chromedp/chromedp"
 )
@@ -30,16 +31,35 @@ var macCandidates = []candidate{
 	{name: "Arc", rel: "Arc.app/Contents/MacOS/Arc"},
 }
 
+var winCandidates = []candidate{
+	{name: "Google Chrome", rel: filepath.Join("Google", "Chrome", "Application", "chrome.exe")},
+	{name: "Microsoft Edge", rel: filepath.Join("Microsoft", "Edge", "Application", "msedge.exe")},
+	{name: "Brave Browser", rel: filepath.Join("BraveSoftware", "Brave-Browser", "Application", "brave.exe")},
+	{name: "Chromium", rel: filepath.Join("Chromium", "Application", "chrome.exe")},
+}
+
+var linuxCandidates = []candidate{
+	{name: "Google Chrome", rel: "/usr/bin/google-chrome"},
+	{name: "Google Chrome (Stable)", rel: "/usr/bin/google-chrome-stable"},
+	{name: "Chromium", rel: "/usr/bin/chromium"},
+	{name: "Chromium Browser", rel: "/usr/bin/chromium-browser"},
+	{name: "Microsoft Edge", rel: "/usr/bin/microsoft-edge-stable"},
+	{name: "Microsoft Edge (Dev)", rel: "/usr/bin/microsoft-edge"},
+	{name: "Brave Browser", rel: "/usr/bin/brave-browser"},
+	{name: "Chromium (Snap)", rel: "/snap/bin/chromium"},
+}
+
 // FindBrowser inspects the host system for an available Chromium-compatible browser.
-// Priority: Google Chrome -> Microsoft Edge -> Brave -> Chromium -> Arc -> System PATH -> Portable Cache.
+// Priority: Native OS standard locations -> Portable Cache -> System PATH lookup.
 func FindBrowser() (*BrowserInfo, error) {
-	if runtime.GOOS == "darwin" {
-		homeDir, _ := os.UserHomeDir()
+	homeDir, _ := os.UserHomeDir()
+
+	switch runtime.GOOS {
+	case "darwin":
 		appDirs := []string{
 			"/Applications",
 			filepath.Join(homeDir, "Applications"),
 		}
-
 		for _, cand := range macCandidates {
 			for _, base := range appDirs {
 				full := filepath.Join(base, cand.rel)
@@ -53,8 +73,64 @@ func FindBrowser() (*BrowserInfo, error) {
 			}
 		}
 
-		// Check portable cache directory: ~/Library/Application Support/Verification Studio/bin/chrome-headless-shell
 		portableDir := filepath.Join(homeDir, "Library", "Application Support", "Verification Studio", "bin")
+		portablePath := filepath.Join(portableDir, "chrome-headless-shell")
+		if isExecutable(portablePath) {
+			return &BrowserInfo{
+				Name:       "Chrome Headless Shell (Portable)",
+				Path:       portablePath,
+				IsPortable: true,
+			}, nil
+		}
+
+	case "windows":
+		var searchBases []string
+		if pf := os.Getenv("ProgramFiles"); pf != "" {
+			searchBases = append(searchBases, pf)
+		}
+		if pfx86 := os.Getenv("ProgramFiles(x86)"); pfx86 != "" {
+			searchBases = append(searchBases, pfx86)
+		}
+		if localApp := os.Getenv("LocalAppData"); localApp != "" {
+			searchBases = append(searchBases, localApp)
+		}
+
+		for _, cand := range winCandidates {
+			for _, base := range searchBases {
+				full := filepath.Join(base, cand.rel)
+				if isExecutable(full) {
+					return &BrowserInfo{
+						Name:       cand.name,
+						Path:       full,
+						IsPortable: false,
+					}, nil
+				}
+			}
+		}
+
+		if localApp := os.Getenv("LocalAppData"); localApp != "" {
+			portablePath := filepath.Join(localApp, "Verification Studio", "bin", "chrome-headless-shell.exe")
+			if isExecutable(portablePath) {
+				return &BrowserInfo{
+					Name:       "Chrome Headless Shell (Portable)",
+					Path:       portablePath,
+					IsPortable: true,
+				}, nil
+			}
+		}
+
+	case "linux":
+		for _, cand := range linuxCandidates {
+			if isExecutable(cand.rel) {
+				return &BrowserInfo{
+					Name:       cand.name,
+					Path:       cand.rel,
+					IsPortable: false,
+				}, nil
+			}
+		}
+
+		portableDir := filepath.Join(homeDir, ".local", "share", "verification-studio", "bin")
 		portablePath := filepath.Join(portableDir, "chrome-headless-shell")
 		if isExecutable(portablePath) {
 			return &BrowserInfo{
@@ -65,7 +141,7 @@ func FindBrowser() (*BrowserInfo, error) {
 		}
 	}
 
-	// Fallback to system PATH lookup
+	// Fallback to system PATH lookup for all platforms
 	pathCandidates := []string{
 		"google-chrome",
 		"google-chrome-stable",
@@ -74,6 +150,8 @@ func FindBrowser() (*BrowserInfo, error) {
 		"chromium",
 		"chromium-browser",
 		"brave-browser",
+		"chrome.exe",
+		"msedge.exe",
 	}
 
 	for _, name := range pathCandidates {
@@ -94,7 +172,10 @@ func isExecutable(path string) bool {
 	if err != nil || info.IsDir() {
 		return false
 	}
-	// Check if executable bit is set
+	if runtime.GOOS == "windows" {
+		ext := strings.ToLower(filepath.Ext(path))
+		return ext == ".exe" || ext == ".cmd" || ext == ".bat"
+	}
 	return info.Mode()&0o111 != 0
 }
 
