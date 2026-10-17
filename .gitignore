@@ -46,6 +46,7 @@ mats_studio_amd64
 gui/mats_studio
 *.exe
 *.dll
+*.syso
 
 # macOS application bundles and disk images (Release artifacts)
 *.app/

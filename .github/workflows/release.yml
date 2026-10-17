@@ -169,12 +169,15 @@ jobs:
           $env:PATH = "C:\msys64\mingw64\bin;" + $env:PATH
           $env:CGO_ENABLED = "1"
           New-Item -ItemType Directory -Force -Path build
+          Set-Content -Path app.rc -Value '1 ICON "assets/app.ico"'
+          windres -i app.rc -O coff -o gui/rsrc_windows_amd64.syso
           go build -ldflags="-H windowsgui -s -w" -o build\VerificationStudio.exe .\gui
+          Remove-Item -Force -ErrorAction SilentlyContinue app.rc, gui\rsrc_windows_amd64.syso
 
       - name: Package Windows Artifacts
         shell: pwsh
         run: |
-          Compress-Archive -Path build\VerificationStudio.exe, assets\verification-studio.png -DestinationPath Verification_Studio_Windows_x64.zip
+          Compress-Archive -Path build\VerificationStudio.exe -DestinationPath Verification_Studio_Windows_x64.zip
           Copy-Item build\VerificationStudio.exe -Destination Verification_Studio_Windows_x64.exe
 
       - name: Upload Windows Artifacts
