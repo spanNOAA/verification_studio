@@ -114,8 +114,7 @@ Verification Studio packages and releases cross-platform standalone binaries aut
 | **macOS** | **Universal DMG (`.dmg`)** | macOS 11.0+ (Apple Silicon `arm64` & Intel `x86_64`) |
 | **Linux (Debian/Ubuntu)** | **Debian Package (`.deb`)** | Ubuntu, Debian, Linux Mint |
 | **Linux (RedHat/Enterprise)** | **RPM Package (`.rpm`)** | RHEL, Rocky Linux, AlmaLinux, CentOS, Fedora |
-| **Windows (Portable)** | **Zip Archive (`.zip`)** | Windows 10 & 11 (64-bit, extract & run) |
-| **Windows (Standalone)** | **Executable (`.exe`)** | Windows 10 & 11 (64-bit) |
+| **Windows** | **Standalone Executable (`.exe`)** | Windows 10 & 11 (64-bit portable, run directly) |
 
 ---
 

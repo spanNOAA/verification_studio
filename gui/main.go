@@ -201,6 +201,7 @@ func main() {
 	defer w.Destroy()
 
 	initMacMenu()
+	setWindowIcon(w.Window())
 
 	w.SetTitle("NOAA GSL Verification Studio")
 	w.SetSize(1160, 800, webview.HintNone)
