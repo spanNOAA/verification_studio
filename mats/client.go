@@ -178,17 +178,20 @@ func (c *Client) ExportStyledChart(ctx context.Context, outPath string, colorMap
 		});
 
 		if (gd.layout) {
-			// Enlarge chart title (v1 & v2 compatible)
-			if (gd.layout.title) {
-				if (typeof gd.layout.title === 'string') {
-					gd.layout.titlefont = Object.assign({}, gd.layout.titlefont, { size: 36, color: '#0f172a' });
-					gd.layout.title = { text: gd.layout.title, font: { size: 36, color: '#0f172a' } };
-				} else {
-					gd.layout.title.font = Object.assign({}, gd.layout.title.font, { size: 36, color: '#0f172a' });
-				}
-			} else if (gd.layout.titlefont) {
-				gd.layout.titlefont.size = 36;
+			// Remove redundant top disclaimer title and annotations to maximize plotting area
+			gd.layout.title = { text: '' };
+			if (gd.layout.titlefont) gd.layout.titlefont = { size: 0 };
+			if (Array.isArray(gd.layout.annotations)) {
+				gd.layout.annotations = gd.layout.annotations.filter(ann => {
+					if (!ann || !ann.text) return true;
+					const t = String(ann.text).toLowerCase();
+					return !t.includes("research purpose");
+				});
 			}
+
+			// Compact top margin to grant extra vertical space for the curves
+			if (!gd.layout.margin) gd.layout.margin = {};
+			gd.layout.margin.t = 25;
 
 			// Enlarge axes titles & tick fonts with automargin (v1 & v2 compatible)
 			['xaxis', 'yaxis', 'xaxis2', 'yaxis2'].forEach(ax => {
@@ -196,28 +199,28 @@ func (c *Client) ExportStyledChart(ctx context.Context, outPath string, colorMap
 					gd.layout[ax].automargin = true;
 					if (gd.layout[ax].title) {
 						if (typeof gd.layout[ax].title === 'string') {
-							gd.layout[ax].titlefont = Object.assign({}, gd.layout[ax].titlefont, { size: 28, color: '#0f172a' });
-							gd.layout[ax].title = { text: gd.layout[ax].title, font: { size: 28, color: '#0f172a' } };
+							gd.layout[ax].titlefont = Object.assign({}, gd.layout[ax].titlefont, { size: 34, color: '#0f172a' });
+							gd.layout[ax].title = { text: gd.layout[ax].title, font: { size: 34, color: '#0f172a' } };
 						} else {
-							gd.layout[ax].title.font = Object.assign({}, gd.layout[ax].title.font, { size: 28, color: '#0f172a' });
+							gd.layout[ax].title.font = Object.assign({}, gd.layout[ax].title.font, { size: 34, color: '#0f172a' });
 						}
 					} else if (gd.layout[ax].titlefont) {
-						gd.layout[ax].titlefont.size = 28;
+						gd.layout[ax].titlefont.size = 34;
 					}
 					if (gd.layout[ax].tickfont) {
-						gd.layout[ax].tickfont.size = 22;
+						gd.layout[ax].tickfont.size = 28;
 						gd.layout[ax].tickfont.color = '#0f172a';
 					} else {
-						gd.layout[ax].tickfont = { size: 22, color: '#0f172a' };
+						gd.layout[ax].tickfont = { size: 28, color: '#0f172a' };
 					}
 				}
 			});
 
 			if (gd.layout.legend) {
-				gd.layout.legend.font = { size: 22, color: '#0f172a' };
-				gd.layout.legend.bgcolor = 'rgba(255, 255, 255, 0.88)';
+				gd.layout.legend.font = { size: 26, color: '#0f172a' };
+				gd.layout.legend.bgcolor = 'rgba(255, 255, 255, 0.90)';
 				gd.layout.legend.bordercolor = 'rgba(203, 213, 225, 0.9)';
-				gd.layout.legend.borderwidth = 1.5;
+				gd.layout.legend.borderwidth = 2;
 			}
 		}
 
