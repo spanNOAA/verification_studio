@@ -164,24 +164,34 @@ func (d *Daemon) StartSessionHeadless() error {
 	return fmt.Errorf("timed out waiting for shell prompt on %s", d.Cluster)
 }
 
-// promoteToPOSIXShell replaces the user's default login shell (e.g. tcsh, csh, zsh)
-// with standard POSIX /bin/sh to guarantee universal syntax compatibility.
-func (d *Daemon) promoteToPOSIXShell() error {
-	drainBuf := make([]byte, 4096)
+// drainPTY flushes any pending bytes from the PTY non-blockingly without hanging on macOS/Darwin.
+func drainPTY(f *os.File) {
+	if f == nil {
+		return
+	}
+	fd := int(f.Fd())
+	_ = syscall.SetNonblock(fd, true)
+	buf := make([]byte, 4096)
 	for {
-		_ = d.MasterPty.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
-		n, _ := d.MasterPty.Read(drainBuf)
-		if n == 0 {
+		n, err := syscall.Read(fd, buf)
+		if n <= 0 || err != nil {
 			break
 		}
 	}
+	_ = syscall.SetNonblock(fd, false)
+}
+
+// promoteToPOSIXShell replaces the user's default login shell (e.g. tcsh, csh, zsh)
+// with standard POSIX /bin/sh to guarantee universal syntax compatibility.
+func (d *Daemon) promoteToPOSIXShell() error {
+	drainPTY(d.MasterPty)
 
 	// Send "exec /bin/sh" to replace current shell process with standard POSIX /bin/sh
 	if _, err := d.MasterPty.WriteString("exec /bin/sh\n"); err != nil {
 		return fmt.Errorf("failed to write exec command: %w", err)
 	}
 
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	// Configure basic POSIX environment: set clean prompt, force C locale
 	initScript := "PS1='__HPC_RO_SH__$ '; export PS1 2>/dev/null; export LC_ALL=C 2>/dev/null\n"
@@ -189,7 +199,7 @@ func (d *Daemon) promoteToPOSIXShell() error {
 		return fmt.Errorf("failed to write POSIX initialization script: %w", err)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	// Verify that the POSIX shell is actively responding to commands
 	code, resp, err := d.ExecRawRemote("echo POSIX_READY", 10*time.Second)
@@ -209,15 +219,8 @@ func (d *Daemon) ExecRawRemote(cmd string, timeout time.Duration) (int, string, 
 		return 1, "", fmt.Errorf("master PTY session is not connected")
 	}
 
-	// Drain any stale output
-	drainBuf := make([]byte, 4096)
-	for {
-		_ = d.MasterPty.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
-		n, _ := d.MasterPty.Read(drainBuf)
-		if n == 0 {
-			break
-		}
-	}
+	// Drain any stale output non-blockingly
+	drainPTY(d.MasterPty)
 
 	randBytes := make([]byte, 4)
 	_, _ = rand.Read(randBytes)
