@@ -106,7 +106,10 @@ func (c *Client) FetchSurfaceTimeSeries(
 				continue
 			}
 
-			if err := c.fetchSingleSurfaceTimeSeries(validModels, sfcDates, colorMap, regLabel, cfg, outPath); err != nil {
+			time.Sleep(300 * time.Millisecond)
+			if err := c.RetryFetch(fn, 2, 2*time.Second, func() error {
+				return c.fetchSingleSurfaceTimeSeries(validModels, sfcDates, colorMap, regLabel, cfg, outPath)
+			}); err != nil {
 				c.Log("  [SURFACE TS WARNING] Failed to fetch Surface TS (%s): %v. Slot left empty.\n", fn, err)
 				_ = os.Remove(outPath)
 			}

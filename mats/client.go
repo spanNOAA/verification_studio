@@ -40,6 +40,22 @@ func (c *Client) Log(format string, args ...any) {
 	}
 }
 
+// RetryFetch executes a fetch action with automatic retry and backoff on transient network or timeout failures.
+func (c *Client) RetryFetch(tag string, maxAttempts int, backoff time.Duration, fn func() error) error {
+	var err error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		err = fn()
+		if err == nil {
+			return nil
+		}
+		if attempt < maxAttempts {
+			c.Log("  [RETRY] %s encountered error (%v). Retrying in %v (attempt %d/%d)...\n", tag, err, backoff, attempt, maxAttempts)
+			time.Sleep(backoff)
+		}
+	}
+	return err
+}
+
 // CheckAvailableModels navigates to a MATS page and verifies which models exist in the data-source dropdown.
 func (c *Client) CheckAvailableModels(ctx context.Context, pageURL string, models []Model, opts ...CheckOptions) ([]Model, error) {
 	if err := chromedp.Do(ctx,

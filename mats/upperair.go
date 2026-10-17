@@ -74,7 +74,10 @@ func (c *Client) FetchUpperAirDieoff(
 			}
 
 			if forceFetch || !isFileValid(outPath) {
-				if err := c.fetchSingleUADieoff(validModels, uaDates, colorMap, regLabel, v.MATSLabel, outPath); err != nil {
+				time.Sleep(300 * time.Millisecond)
+				if err := c.RetryFetch(fn, 2, 2*time.Second, func() error {
+					return c.fetchSingleUADieoff(validModels, uaDates, colorMap, regLabel, v.MATSLabel, outPath)
+				}); err != nil {
 					c.Log("  [UPPER AIR WARNING] Failed to fetch UA Dieoff (%s, %s): %v. Slot left empty.\n", v.MATSLabel, reg, err)
 					_ = os.Remove(outPath)
 				}
@@ -257,7 +260,10 @@ func (c *Client) FetchUpperAirProfiles(
 			}
 
 			if forceFetch || !isFileValid(outPath) {
-				if err := c.fetchSingleUAProfile(validModels, uaDates, colorMap, regLabel, cfg, outPath); err != nil {
+				time.Sleep(300 * time.Millisecond)
+				if err := c.RetryFetch(fn, 2, 2*time.Second, func() error {
+					return c.fetchSingleUAProfile(validModels, uaDates, colorMap, regLabel, cfg, outPath)
+				}); err != nil {
 					c.Log("  [UPPER AIR WARNING] Failed to fetch UA Profile (%s): %v. Slot left empty.\n", fn, err)
 					_ = os.Remove(outPath)
 				}
@@ -424,7 +430,10 @@ func (c *Client) FetchUpperAirAMDAR(
 		}
 
 		if forceFetch || !isFileValid(outPath) {
-			if err := c.fetchSingleAMDARDieoff(validModels, uaDates, colorMap, v.MATSLabel, outPath); err != nil {
+			time.Sleep(300 * time.Millisecond)
+			if err := c.RetryFetch(fn, 2, 2*time.Second, func() error {
+				return c.fetchSingleAMDARDieoff(validModels, uaDates, colorMap, v.MATSLabel, outPath)
+			}); err != nil {
 				c.Log("  [AMDAR WARNING] Failed to fetch AMDAR Dieoff (%s): %v. Slot left empty.\n", v.MATSLabel, err)
 				_ = os.Remove(outPath)
 			}
@@ -444,7 +453,10 @@ func (c *Client) FetchUpperAirAMDAR(
 		}
 
 		if forceFetch || !isFileValid(outPath) {
-			if err := c.fetchSingleAMDARProfile(validModels, uaDates, colorMap, cfg, outPath); err != nil {
+			time.Sleep(300 * time.Millisecond)
+			if err := c.RetryFetch(fn, 2, 2*time.Second, func() error {
+				return c.fetchSingleAMDARProfile(validModels, uaDates, colorMap, cfg, outPath)
+			}); err != nil {
 				c.Log("  [AMDAR WARNING] Failed to fetch AMDAR Profile (%s): %v. Slot left empty.\n", fn, err)
 				_ = os.Remove(outPath)
 			}

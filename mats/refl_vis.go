@@ -81,7 +81,10 @@ func (c *Client) FetchReflectivity(
 				onProgress(currentStep, totalSteps, fmt.Sprintf("Radar CSI Dieoff (%s): %s", reg, th.Label))
 			}
 			if forceFetch || !isFileValid(outCSI) {
-				if err := c.fetchSingleRadarChart("Dieoff", regLabel, th.MATSValue, "CSI (Critical Success Index)", "", sfcDates, colorMap, validModels, outCSI); err != nil {
+				time.Sleep(300 * time.Millisecond)
+				if err := c.RetryFetch(fnCSI, 2, 2*time.Second, func() error {
+					return c.fetchSingleRadarChart("Dieoff", regLabel, th.MATSValue, "CSI (Critical Success Index)", "", sfcDates, colorMap, validModels, outCSI)
+				}); err != nil {
 					c.Log("  [RADAR WARNING] Failed to fetch Radar CSI Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
 					_ = os.Remove(outCSI)
 				}
@@ -97,7 +100,10 @@ func (c *Client) FetchReflectivity(
 				onProgress(currentStep, totalSteps, fmt.Sprintf("Radar Bias Dieoff (%s): %s", reg, th.Label))
 			}
 			if forceFetch || !isFileValid(outBias) {
-				if err := c.fetchSingleRadarChart("Dieoff", regLabel, th.MATSValue, "Bias (Forecast / Actual)", "", sfcDates, colorMap, validModels, outBias); err != nil {
+				time.Sleep(300 * time.Millisecond)
+				if err := c.RetryFetch(fnBias, 2, 2*time.Second, func() error {
+					return c.fetchSingleRadarChart("Dieoff", regLabel, th.MATSValue, "Bias (Forecast / Actual)", "", sfcDates, colorMap, validModels, outBias)
+				}); err != nil {
 					c.Log("  [RADAR WARNING] Failed to fetch Radar Bias Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
 					_ = os.Remove(outBias)
 				}
@@ -117,7 +123,10 @@ func (c *Client) FetchReflectivity(
 					onProgress(currentStep, totalSteps, fmt.Sprintf("Radar %sh TS CSI (%s): %s", fhr, reg, th.Label))
 				}
 				if forceFetch || !isFileValid(outCSI) {
-					if err := c.fetchSingleRadarChart("TimeSeries", regLabel, th.MATSValue, "CSI (Critical Success Index)", fhr, sfcDates, colorMap, validModels, outCSI); err != nil {
+					time.Sleep(300 * time.Millisecond)
+					if err := c.RetryFetch(fnCSI, 2, 2*time.Second, func() error {
+						return c.fetchSingleRadarChart("TimeSeries", regLabel, th.MATSValue, "CSI (Critical Success Index)", fhr, sfcDates, colorMap, validModels, outCSI)
+					}); err != nil {
 						c.Log("  [RADAR WARNING] Failed to fetch Radar %sh TS CSI (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
 						_ = os.Remove(outCSI)
 					}
@@ -133,7 +142,10 @@ func (c *Client) FetchReflectivity(
 					onProgress(currentStep, totalSteps, fmt.Sprintf("Radar %sh TS Bias (%s): %s", fhr, reg, th.Label))
 				}
 				if forceFetch || !isFileValid(outBias) {
-					if err := c.fetchSingleRadarChart("TimeSeries", regLabel, th.MATSValue, "Bias (Forecast / Actual)", fhr, sfcDates, colorMap, validModels, outBias); err != nil {
+					time.Sleep(300 * time.Millisecond)
+					if err := c.RetryFetch(fnBias, 2, 2*time.Second, func() error {
+						return c.fetchSingleRadarChart("TimeSeries", regLabel, th.MATSValue, "Bias (Forecast / Actual)", fhr, sfcDates, colorMap, validModels, outBias)
+					}); err != nil {
 						c.Log("  [RADAR WARNING] Failed to fetch Radar %sh TS Bias (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
 						_ = os.Remove(outBias)
 					}
@@ -287,7 +299,10 @@ func (c *Client) FetchCeiling(
 				onProgress(currentStep, totalSteps, fmt.Sprintf("Ceiling CSI Dieoff (%s): %s", reg, th.Label))
 			}
 			if forceFetch || !isFileValid(outCSI) {
-				if err := c.fetchSingleCeilVisChart("Dieoff", "Ceiling", regLabel, th.MATSValue, "CSI (Critical Success Index)", "", sfcDates, colorMap, validModels, outCSI); err != nil {
+				time.Sleep(300 * time.Millisecond)
+				if err := c.RetryFetch(fnCSI, 2, 2*time.Second, func() error {
+					return c.fetchSingleCeilVisChart("Dieoff", "Ceiling", regLabel, th.MATSValue, "CSI (Critical Success Index)", "", sfcDates, colorMap, validModels, outCSI)
+				}); err != nil {
 					c.Log("  [CEILING WARNING] Failed to fetch Ceiling CSI Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
 					_ = os.Remove(outCSI)
 				}
@@ -303,7 +318,10 @@ func (c *Client) FetchCeiling(
 				onProgress(currentStep, totalSteps, fmt.Sprintf("Ceiling Bias Dieoff (%s): %s", reg, th.Label))
 			}
 			if forceFetch || !isFileValid(outBias) {
-				if err := c.fetchSingleCeilVisChart("Dieoff", "Ceiling", regLabel, th.MATSValue, "Bias (Forecast / Actual)", "", sfcDates, colorMap, validModels, outBias); err != nil {
+				time.Sleep(300 * time.Millisecond)
+				if err := c.RetryFetch(fnBias, 2, 2*time.Second, func() error {
+					return c.fetchSingleCeilVisChart("Dieoff", "Ceiling", regLabel, th.MATSValue, "Bias (Forecast / Actual)", "", sfcDates, colorMap, validModels, outBias)
+				}); err != nil {
 					c.Log("  [CEILING WARNING] Failed to fetch Ceiling Bias Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
 					_ = os.Remove(outBias)
 				}
@@ -323,7 +341,10 @@ func (c *Client) FetchCeiling(
 					onProgress(currentStep, totalSteps, fmt.Sprintf("Ceiling %sh TS CSI (%s): %s", fhr, reg, th.Label))
 				}
 				if forceFetch || !isFileValid(outCSI) {
-					if err := c.fetchSingleCeilVisChart("TimeSeries", "Ceiling", regLabel, th.MATSValue, "CSI (Critical Success Index)", fhr, sfcDates, colorMap, validModels, outCSI); err != nil {
+					time.Sleep(300 * time.Millisecond)
+					if err := c.RetryFetch(fnCSI, 2, 2*time.Second, func() error {
+						return c.fetchSingleCeilVisChart("TimeSeries", "Ceiling", regLabel, th.MATSValue, "CSI (Critical Success Index)", fhr, sfcDates, colorMap, validModels, outCSI)
+					}); err != nil {
 						c.Log("  [CEILING WARNING] Failed to fetch Ceiling %sh TS CSI (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
 						_ = os.Remove(outCSI)
 					}
@@ -339,7 +360,10 @@ func (c *Client) FetchCeiling(
 					onProgress(currentStep, totalSteps, fmt.Sprintf("Ceiling %sh TS Bias (%s): %s", fhr, reg, th.Label))
 				}
 				if forceFetch || !isFileValid(outBias) {
-					if err := c.fetchSingleCeilVisChart("TimeSeries", "Ceiling", regLabel, th.MATSValue, "Bias (Forecast / Actual)", fhr, sfcDates, colorMap, validModels, outBias); err != nil {
+					time.Sleep(300 * time.Millisecond)
+					if err := c.RetryFetch(fnBias, 2, 2*time.Second, func() error {
+						return c.fetchSingleCeilVisChart("TimeSeries", "Ceiling", regLabel, th.MATSValue, "Bias (Forecast / Actual)", fhr, sfcDates, colorMap, validModels, outBias)
+					}); err != nil {
 						c.Log("  [CEILING WARNING] Failed to fetch Ceiling %sh TS Bias (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
 						_ = os.Remove(outBias)
 					}
@@ -416,7 +440,10 @@ func (c *Client) FetchVisibility(
 				onProgress(currentStep, totalSteps, fmt.Sprintf("Visibility CSI Dieoff (%s): %s", reg, th.Label))
 			}
 			if forceFetch || !isFileValid(outCSI) {
-				if err := c.fetchSingleCeilVisChart("Dieoff", "Visibility", regLabel, th.MATSValue, "CSI (Critical Success Index)", "", sfcDates, colorMap, validModels, outCSI); err != nil {
+				time.Sleep(300 * time.Millisecond)
+				if err := c.RetryFetch(fnCSI, 2, 2*time.Second, func() error {
+					return c.fetchSingleCeilVisChart("Dieoff", "Visibility", regLabel, th.MATSValue, "CSI (Critical Success Index)", "", sfcDates, colorMap, validModels, outCSI)
+				}); err != nil {
 					c.Log("  [VISIBILITY WARNING] Failed to fetch Visibility CSI Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
 					_ = os.Remove(outCSI)
 				}
@@ -432,7 +459,10 @@ func (c *Client) FetchVisibility(
 				onProgress(currentStep, totalSteps, fmt.Sprintf("Visibility Bias Dieoff (%s): %s", reg, th.Label))
 			}
 			if forceFetch || !isFileValid(outBias) {
-				if err := c.fetchSingleCeilVisChart("Dieoff", "Visibility", regLabel, th.MATSValue, "Bias (Forecast / Actual)", "", sfcDates, colorMap, validModels, outBias); err != nil {
+				time.Sleep(300 * time.Millisecond)
+				if err := c.RetryFetch(fnBias, 2, 2*time.Second, func() error {
+					return c.fetchSingleCeilVisChart("Dieoff", "Visibility", regLabel, th.MATSValue, "Bias (Forecast / Actual)", "", sfcDates, colorMap, validModels, outBias)
+				}); err != nil {
 					c.Log("  [VISIBILITY WARNING] Failed to fetch Visibility Bias Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
 					_ = os.Remove(outBias)
 				}
@@ -452,7 +482,10 @@ func (c *Client) FetchVisibility(
 					onProgress(currentStep, totalSteps, fmt.Sprintf("Visibility %sh TS CSI (%s): %s", fhr, reg, th.Label))
 				}
 				if forceFetch || !isFileValid(outCSI) {
-					if err := c.fetchSingleCeilVisChart("TimeSeries", "Visibility", regLabel, th.MATSValue, "CSI (Critical Success Index)", fhr, sfcDates, colorMap, validModels, outCSI); err != nil {
+					time.Sleep(300 * time.Millisecond)
+					if err := c.RetryFetch(fnCSI, 2, 2*time.Second, func() error {
+						return c.fetchSingleCeilVisChart("TimeSeries", "Visibility", regLabel, th.MATSValue, "CSI (Critical Success Index)", fhr, sfcDates, colorMap, validModels, outCSI)
+					}); err != nil {
 						c.Log("  [VISIBILITY WARNING] Failed to fetch Visibility %sh TS CSI (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
 						_ = os.Remove(outCSI)
 					}
@@ -468,7 +501,10 @@ func (c *Client) FetchVisibility(
 					onProgress(currentStep, totalSteps, fmt.Sprintf("Visibility %sh TS Bias (%s): %s", fhr, reg, th.Label))
 				}
 				if forceFetch || !isFileValid(outBias) {
-					if err := c.fetchSingleCeilVisChart("TimeSeries", "Visibility", regLabel, th.MATSValue, "Bias (Forecast / Actual)", fhr, sfcDates, colorMap, validModels, outBias); err != nil {
+					time.Sleep(300 * time.Millisecond)
+					if err := c.RetryFetch(fnBias, 2, 2*time.Second, func() error {
+						return c.fetchSingleCeilVisChart("TimeSeries", "Visibility", regLabel, th.MATSValue, "Bias (Forecast / Actual)", fhr, sfcDates, colorMap, validModels, outBias)
+					}); err != nil {
 						c.Log("  [VISIBILITY WARNING] Failed to fetch Visibility %sh TS Bias (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
 						_ = os.Remove(outBias)
 					}

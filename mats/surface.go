@@ -78,7 +78,10 @@ func (c *Client) FetchSurfaceDieoff(
 				continue
 			}
 
-			if err := c.fetchSingleSurfaceDieoff(validModels, sfcDates, colorMap, regLabel, v.MATSLabel, outPath); err != nil {
+			time.Sleep(300 * time.Millisecond)
+			if err := c.RetryFetch(fn, 2, 2*time.Second, func() error {
+				return c.fetchSingleSurfaceDieoff(validModels, sfcDates, colorMap, regLabel, v.MATSLabel, outPath)
+			}); err != nil {
 				c.Log("  [SURFACE WARNING] Failed to fetch Surface Dieoff (%s, %s): %v. Slot left empty.\n", v.MATSLabel, reg, err)
 				_ = os.Remove(outPath)
 			}
