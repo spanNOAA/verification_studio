@@ -718,7 +718,7 @@
           <div class="form-group">
             <label class="form-label" for="outputDir">3. Output Directory:</label>
             <div class="input-row">
-              <input type="text" id="outputDir" class="form-control" value="__DEFAULT_OUTPUT_DIR__" placeholder="Directory path to save charts, PPT, and HTML report">
+              <input type="text" id="outputDir" class="form-control" value="__DEFAULT_OUTPUT_DIR__" placeholder="Directory path to save charts, PPT, and HTML report" oninput="updateForceFetchBanner()">
               <button type="button" class="btn btn-secondary" onclick="browseFolder()">📂 Browse...</button>
             </div>
             <div class="form-hint">Automatically defaults to your Desktop. High-resolution charts, PowerPoint presentation, and HTML report will be saved here.</div>
@@ -878,11 +878,17 @@
             </div>
             <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
               <label style="font-size:13px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px;" title="Skip all image fetching; use existing local cached plots to generate presentations immediately">
-                <input type="checkbox" id="skipFetch"> ⚡ Generate PPT only (Skip fetch)
+                <input type="checkbox" id="skipFetch" onchange="onSkipFetchChange()"> ⚡ Generate PPT only (Skip fetch)
               </label>
               <label style="font-size:13px; font-weight:600; cursor:pointer; color:#b91c1c; display:flex; align-items:center; gap:6px;" title="Global Cache Override: Force re-fetching fresh images for BOTH MATS verification curves and Composite Reflectivity radar maps, bypassing local cache">
-                <input type="checkbox" id="forceFetch"> 🔄 Force Refresh (Override All Cache: MATS + Reflectivity)
+                <input type="checkbox" id="forceFetch" onchange="onForceFetchToggle(this)"> 🔄 Force Refresh (Override All Cache: MATS + Reflectivity)
               </label>
+            </div>
+          </div>
+          <div id="forceFetchWarningBanner" style="display:none; width:100%; padding:9px 12px; background:#fff1f2; border:1px solid #fecdd3; border-radius:6px; font-size:12px; color:#991b1b; align-items:center; gap:8px;">
+            <span style="font-size:16px; flex-shrink:0;">⚠️</span>
+            <div>
+              <strong>Force Refresh Active:</strong> Output cache in <code id="forceFetchBannerPath" style="font-weight:700; color:#b91c1c; background:#fee2e2; padding:1px 6px; border-radius:4px; font-family:'SF Mono',Menlo,monospace;">...</code> will be purged upon execution.
             </div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; width:100%; flex-wrap:wrap; gap:12px;">
@@ -977,6 +983,39 @@
     </div>
   </div>
 
+  <!-- Force Refresh Confirmation Modal -->
+  <div id="forceFetchModal" onclick="if(event.target===this) cancelForceFetch()" style="display:none; position:fixed; inset:0; z-index:999999; background:rgba(15, 23, 42, 0.65); backdrop-filter:blur(3px); align-items:center; justify-content:center; padding:16px;">
+    <div style="background:#ffffff; border-radius:12px; width:100%; max-width:500px; box-shadow:0 20px 40px -8px rgba(0,0,0,0.3); border:1px solid #cbd5e1; overflow:hidden;">
+      <div style="padding:16px 20px; background:#fff1f2; border-bottom:1px solid #fecdd3; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:24px; line-height:1;">⚠️</span>
+        <div>
+          <h3 style="margin:0; font-size:15px; font-weight:700; color:#991b1b;">Force Refresh Notice</h3>
+          <p style="margin:2px 0 0 0; font-size:11.5px; color:#be123c;">Enabling this option will remove output directory cache</p>
+        </div>
+      </div>
+      <div style="padding:18px 20px; font-size:13px; color:#334155; line-height:1.5;">
+        <p style="margin:0 0 10px 0;">
+          Checking <strong>Force Refresh</strong> will purge all existing cached verification plots and reflectivity charts in your output directory (outPath):
+        </p>
+        <div id="forceFetchModalPath" style="padding:8px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-family:'SF Mono',Menlo,monospace; font-size:12px; color:#0f172a; word-break:break-all; margin-bottom:12px; max-height:80px; overflow-y:auto; font-weight:600;">
+          (Selected Output Directory)
+        </div>
+        <ul style="margin:0 0 14px 0; padding-left:18px; font-size:12px; color:#475569; display:flex; flex-direction:column; gap:5px;">
+          <li>All cached MATS verification curves in <code style="color:#b91c1c; font-weight:600;">/mats</code> will be removed before execution.</li>
+          <li>If radar cases are included, cached plots in <code style="color:#b91c1c; font-weight:600;">/cref</code> will also be purged.</li>
+          <li>If any chart fails to fetch, its slot will remain <strong>strictly empty</strong> with an explicit warning in the live log, rather than using old cache.</li>
+        </ul>
+        <p style="margin:0; font-size:12.5px; font-weight:600; color:#1e293b;">
+          Do you want to proceed with Force Refresh?
+        </p>
+      </div>
+      <div style="padding:12px 20px; background:#f8fafc; border-top:1px solid #e2e8f0; display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" class="btn btn-secondary" onclick="cancelForceFetch()" style="padding:7px 16px;">Cancel</button>
+        <button type="button" class="btn btn-danger" onclick="confirmForceFetch()" style="padding:7px 18px; font-weight:700;">Yes, Enable Force Refresh</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const EXAMPLE_MODELS = `RRFSv2_conus_3km_exp1 - gaeac6:/gpfs/f6/wrfruc/scratch/username/retros/exp1\nRRFSv2_conus_3km_baseline`;
 
@@ -1005,8 +1044,14 @@
 
     document.getElementById('modelsText').addEventListener('input', updateModelBadge);
 
-    // Global keyboard shortcuts (Cmd+Q, Cmd+W)
+    // Global keyboard shortcuts (Cmd+Q, Cmd+W, Escape)
     window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const ffModal = document.getElementById('forceFetchModal');
+        if (ffModal && ffModal.style.display !== 'none') {
+          cancelForceFetch();
+        }
+      }
       if ((e.metaKey || e.ctrlKey) && (e.key === 'q' || e.key === 'Q' || e.key === 'w' || e.key === 'W')) {
         if (window.quitApp) {
           e.preventDefault();
@@ -1015,11 +1060,80 @@
       }
     });
 
+    function getEffectiveOutPath() {
+      const el = document.getElementById('outputDir');
+      const dir = el ? el.value.trim() : '';
+      return dir || '(Selected Output Directory)';
+    }
+
+    function onForceFetchToggle(cb) {
+      if (cb.checked) {
+        cb.checked = false;
+        const path = getEffectiveOutPath();
+        const modalPathEl = document.getElementById('forceFetchModalPath');
+        if (modalPathEl) {
+          modalPathEl.textContent = path;
+        }
+        const modal = document.getElementById('forceFetchModal');
+        if (modal) {
+          modal.style.display = 'flex';
+        }
+      } else {
+        updateForceFetchBanner();
+      }
+    }
+
+    function confirmForceFetch() {
+      const cb = document.getElementById('forceFetch');
+      if (cb) cb.checked = true;
+      const skipCb = document.getElementById('skipFetch');
+      if (skipCb) skipCb.checked = false;
+      const modal = document.getElementById('forceFetchModal');
+      if (modal) modal.style.display = 'none';
+      updateForceFetchBanner();
+    }
+
+    function cancelForceFetch() {
+      const cb = document.getElementById('forceFetch');
+      if (cb) cb.checked = false;
+      const modal = document.getElementById('forceFetchModal');
+      if (modal) modal.style.display = 'none';
+      updateForceFetchBanner();
+    }
+
+    function updateForceFetchBanner() {
+      const cb = document.getElementById('forceFetch');
+      const banner = document.getElementById('forceFetchWarningBanner');
+      const bannerPath = document.getElementById('forceFetchBannerPath');
+      if (!banner || !cb) return;
+
+      if (cb.checked) {
+        if (bannerPath) {
+          bannerPath.textContent = getEffectiveOutPath();
+        }
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
+      }
+    }
+
+    function onSkipFetchChange() {
+      const skipCb = document.getElementById('skipFetch');
+      if (skipCb && skipCb.checked) {
+        const forceCb = document.getElementById('forceFetch');
+        if (forceCb && forceCb.checked) {
+          forceCb.checked = false;
+          updateForceFetchBanner();
+        }
+      }
+    }
+
     async function browseFolder() {
       if (window.selectFolderDialog) {
         const path = await window.selectFolderDialog();
         if (path) {
           document.getElementById('outputDir').value = path;
+          updateForceFetchBanner();
         }
       }
     }
