@@ -141,15 +141,30 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 
 	// Verify that daemon socket comes online
 	t0 := time.Now()
-	for time.Since(t0) < 10*time.Second {
-		if code, resp, err := ClientSend(clusterKey, OpPing, ""); err == nil && code == 0 && strings.Contains(resp, "PONG") {
+	var lastErr error
+	var lastResp string
+	for time.Since(t0) < 15*time.Second {
+		code, resp, err := ClientSend(clusterKey, OpPing, "")
+		if err == nil && code == 0 && strings.Contains(resp, "PONG") {
 			fmt.Printf("[%s] Read-only session is now LIVE and READY in background!\n", strings.ToUpper(clusterKey))
 			fmt.Printf("[%s] Verification Studio will now retrieve radar images automatically.\n\n", strings.ToUpper(clusterKey))
 			time.Sleep(1 * time.Second)
 			return nil
 		}
+		if err != nil {
+			lastErr = err
+		}
+		if resp != "" {
+			lastResp = resp
+		}
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	return fmt.Errorf("timed out waiting for background daemon socket to become ready")
+	errMsg := "timed out waiting for background daemon socket to become ready"
+	if lastResp != "" {
+		errMsg += fmt.Sprintf(" (daemon response: %s)", strings.TrimSpace(lastResp))
+	} else if lastErr != nil {
+		errMsg += fmt.Sprintf(" (connection error: %v)", lastErr)
+	}
+	return fmt.Errorf("%s", errMsg)
 }

@@ -1,6 +1,7 @@
 package hpc
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,3 +87,43 @@ func TestSafeAtomicWrite(t *testing.T) {
 		t.Errorf("Read back data mismatch: got %q, expected %q", string(readBack), string(data))
 	}
 }
+
+func TestVerifyPeerUID(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "hpc_peercred_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	sockPath := filepath.Join(tempDir, "test.sock")
+	l, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("Failed to listen unix socket: %v", err)
+	}
+	defer l.Close()
+
+	var verifyResult bool
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		conn, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		verifyResult = VerifyPeerUID(conn)
+	}()
+
+	client, err := net.Dial("unix", sockPath)
+	if err != nil {
+		t.Fatalf("Failed to dial unix socket: %v", err)
+	}
+	defer client.Close()
+
+	<-done
+	if !verifyResult {
+		t.Errorf("VerifyPeerUID failed for local connection from same user (UID: %d)", os.Getuid())
+	}
+}
+

@@ -804,12 +804,12 @@
           <div id="radarBlockBody">
             <div class="radar-creator-box">
               <div style="font-size:12px; font-weight:700; color:#1e293b; margin-bottom:6px;">
-                ➕ Add Verification Case (日历选择起报日期与时次，自动匹配预报时效):
+                ➕ Add Verification Case (Select cycle date & hour to match forecast lead times):
               </div>
               
               <div class="row" style="align-items:flex-end; gap:10px;">
                 <div class="col" style="flex:1.2;">
-                  <label class="form-label" style="margin-bottom:4px; font-size:11.5px;">Initialization Date & Cycle (起报时次 UTC):</label>
+                  <label class="form-label" style="margin-bottom:4px; font-size:11.5px;">Initialization Date & Cycle (UTC):</label>
                   <div class="dt-field-group" onclick="openDateTimePicker('crefCaseDateTime', this)">
                     <span class="dt-badge">Cycle</span>
                     <input type="text" id="crefCaseDateTime" class="dt-input" value="05/07/2024 00:00" readonly>
@@ -833,7 +833,7 @@
               <div style="margin-top:10px; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                   <span style="font-size:12px; font-weight:700; color:#0f172a;">
-                    ⏱️ Select Forecast Lead Hours (预报时效多选):
+                    ⏱️ Select Forecast Lead Hours:
                   </span>
                   <span id="crefCycleBadge" class="badge" style="background:#e0f2fe; color:#0369a1; font-size:11px;">
                     Max: 72-h Synoptic (00Z)
@@ -859,7 +859,7 @@
             <div style="margin-top:10px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                 <label class="form-label" style="margin-bottom:0; font-size:12px; font-weight:700;">
-                  📋 Active Radar Cases for Verification (已添加验证列表):
+                  📋 Active Radar Cases for Verification:
                 </label>
                 <span id="radarCasesSummary" style="font-size:11.5px; color:#64748b; font-weight:600;">
                   0 Cases · 0 Slides
