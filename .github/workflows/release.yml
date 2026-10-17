@@ -108,17 +108,15 @@ jobs:
           cp assets/verification-studio.desktop "$DEB_ROOT/usr/share/applications/"
           cp assets/verification-studio.png "$DEB_ROOT/usr/share/icons/hicolor/1024x1024/apps/"
 
-          cat <<EOF > "$DEB_ROOT/DEBIAN/control"
-Package: verification-studio
-Version: $VER
-Section: science
-Priority: optional
-Architecture: amd64
-Depends: libgtk-3-0, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
-Maintainer: NOAA GSL Verification Team
-Description: NOAA GSL Numerical Weather Prediction Verification Studio
- Automated verification analysis and presentation generator for NWP models.
-EOF
+          echo "Package: verification-studio" > "$DEB_ROOT/DEBIAN/control"
+          echo "Version: $VER" >> "$DEB_ROOT/DEBIAN/control"
+          echo "Section: science" >> "$DEB_ROOT/DEBIAN/control"
+          echo "Priority: optional" >> "$DEB_ROOT/DEBIAN/control"
+          echo "Architecture: amd64" >> "$DEB_ROOT/DEBIAN/control"
+          echo "Depends: libgtk-3-0, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37" >> "$DEB_ROOT/DEBIAN/control"
+          echo "Maintainer: NOAA GSL Verification Team" >> "$DEB_ROOT/DEBIAN/control"
+          echo "Description: NOAA GSL Numerical Weather Prediction Verification Studio" >> "$DEB_ROOT/DEBIAN/control"
+          echo " Automated verification analysis and presentation generator for NWP models." >> "$DEB_ROOT/DEBIAN/control"
 
           dpkg-deb --build "$DEB_ROOT" "verification-studio_${VER}_amd64.deb"
 
@@ -188,7 +186,7 @@ EOF
     name: Publish Release Assets
     needs: [macos, linux, windows]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download macOS Artifact
         uses: actions/download-artifact@v4
