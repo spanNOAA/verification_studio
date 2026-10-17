@@ -164,23 +164,6 @@ func (d *Daemon) StartSessionHeadless() error {
 	return fmt.Errorf("timed out waiting for shell prompt on %s", d.Cluster)
 }
 
-// drainPTY flushes any pending bytes from the PTY non-blockingly without hanging on macOS/Darwin.
-func drainPTY(f *os.File) {
-	if f == nil {
-		return
-	}
-	fd := int(f.Fd())
-	_ = syscall.SetNonblock(fd, true)
-	buf := make([]byte, 4096)
-	for {
-		n, err := syscall.Read(fd, buf)
-		if n <= 0 || err != nil {
-			break
-		}
-	}
-	_ = syscall.SetNonblock(fd, false)
-}
-
 // promoteToPOSIXShell replaces the user's default login shell (e.g. tcsh, csh, zsh)
 // with standard POSIX /bin/sh to guarantee universal syntax compatibility.
 func (d *Daemon) promoteToPOSIXShell() error {
