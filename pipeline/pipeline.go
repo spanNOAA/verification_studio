@@ -212,12 +212,11 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 	}
 
 	log("\n==================================================================\n")
-	log(" [Go Native Engine] Initializing Verification Pipeline...\n")
+	log(" Initializing Verification Pipeline...\n")
 	log(" Title   : %s\n", req.Title)
 	log(" Output  : %s\n", req.OutputDir)
 	log(" Report  : %s (.pptx / .html)\n", req.ReportName)
 	log(" Periods : Surface [%s] | Upper-Air [%s]\n", req.SfcDates, req.UaDates)
-	log(" Engine  : Pure Go Verification Studio (Zero Python, Zero Node)\n")
 	log("==================================================================\n\n")
 
 	models := ParseModels(req.ModelsText)

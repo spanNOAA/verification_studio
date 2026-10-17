@@ -819,7 +819,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 		return nil, fmt.Errorf("failed to commit PPTX to %s: %w", outputPptx, err)
 	}
 
-	fmt.Printf("[DONE] Successfully created pure Go PowerPoint presentation: %s (%d slides)\n", outputPptx, len(slidesData))
+	fmt.Printf("[DONE] Successfully created PowerPoint presentation: %s (%d slides)\n", outputPptx, len(slidesData))
 	return slidesData, nil
 }
 
