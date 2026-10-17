@@ -141,7 +141,16 @@ func (d *Daemon) StartSessionHeadless() error {
 			cleaned := ansiCleaner.ReplaceAll(buf, []byte(""))
 			if d.promptRegex.Match(buf) || d.promptRegex.Match(cleaned) || GenericPromptRegex.Match(buf) {
 				time.Sleep(300 * time.Millisecond)
-				d.Log("Prompt detected! Read-only session to %s ready.", strings.ToUpper(d.Cluster))
+				d.Log("Prompt detected! Read-only session to %s established.", strings.ToUpper(d.Cluster))
+
+				// Promote session to standard POSIX /bin/sh to guarantee universal syntax compatibility across all clusters (tcsh, csh, zsh, bash)
+				d.Log("Promoting session to standard POSIX /bin/sh for cluster %s...", strings.ToUpper(d.Cluster))
+				if err := d.promoteToPOSIXShell(); err != nil {
+					d.Log("Warning: could not promote to /bin/sh: %v", err)
+				} else {
+					d.Log("Successfully promoted session to POSIX /bin/sh.")
+				}
+
 				return nil
 			}
 		}
@@ -153,6 +162,42 @@ func (d *Daemon) StartSessionHeadless() error {
 	_ = cmd.Process.Kill()
 	_ = ptmx.Close()
 	return fmt.Errorf("timed out waiting for shell prompt on %s", d.Cluster)
+}
+
+// promoteToPOSIXShell replaces the user's default login shell (e.g. tcsh, csh, zsh)
+// with standard POSIX /bin/sh to guarantee universal syntax compatibility.
+func (d *Daemon) promoteToPOSIXShell() error {
+	drainBuf := make([]byte, 4096)
+	for {
+		_ = d.MasterPty.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+		n, _ := d.MasterPty.Read(drainBuf)
+		if n == 0 {
+			break
+		}
+	}
+
+	// Send "exec /bin/sh" to replace current shell process with standard POSIX /bin/sh
+	if _, err := d.MasterPty.WriteString("exec /bin/sh\n"); err != nil {
+		return fmt.Errorf("failed to write exec command: %w", err)
+	}
+
+	time.Sleep(300 * time.Millisecond)
+
+	// Configure basic POSIX environment: set clean prompt, force C locale
+	initScript := "PS1='__HPC_RO_SH__$ '; export PS1 2>/dev/null; export LC_ALL=C 2>/dev/null\n"
+	if _, err := d.MasterPty.WriteString(initScript); err != nil {
+		return fmt.Errorf("failed to write POSIX initialization script: %w", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify that the POSIX shell is actively responding to commands
+	code, resp, err := d.ExecRawRemote("echo POSIX_READY", 10*time.Second)
+	if err != nil || code != 0 || !strings.Contains(resp, "POSIX_READY") {
+		return fmt.Errorf("POSIX shell verification failed (code=%d, resp=%q, err=%v)", code, resp, err)
+	}
+
+	return nil
 }
 
 // ExecRawRemote executes an internal command template over the persistent PTY and captures output.
@@ -191,6 +236,19 @@ func (d *Daemon) ExecRawRemote(cmd string, timeout time.Duration) (int, string, 
 	var raw strings.Builder
 	startFound := false
 	startTime := time.Now()
+
+	watchdogDone := make(chan struct{})
+	defer close(watchdogDone)
+	go func() {
+		select {
+		case <-watchdogDone:
+			return
+		case <-time.After(timeout):
+			if d.MasterPty != nil {
+				_, _ = d.MasterPty.WriteString("\x03\n")
+			}
+		}
+	}()
 
 	for {
 		if time.Since(startTime) > timeout {
@@ -273,7 +331,7 @@ func (d *Daemon) ExecuteReadOnlyHandler(op ReadOnlyOp, remotePath string) (int, 
 			"if [ -f %s ]; then "+
 				"sz=$(stat -c \"%%s\" -- %s 2>/dev/null || stat -f \"%%z\" -- %s 2>/dev/null || echo 0); "+
 				"if [ \"$sz\" -le %d ]; then "+
-				"(base64 -w 0 -- %s 2>/dev/null || base64 -b 0 -- %s 2>/dev/null || base64 -- %s | tr -d \"\\r\\n\"); exit 0; "+
+				"(base64 -w 0 -- %s 2>/dev/null || base64 -b 0 -- %s 2>/dev/null || base64 < %s 2>/dev/null | tr -d \"\\r\\n\"); exit 0; "+
 				"else echo \"ERR_FILE_TOO_LARGE\"; exit 2; fi; "+
 				"else echo \"ERR_FILE_NOT_FOUND\"; exit 1; fi",
 			quoted, quoted, quoted, MaxDownloadBytes, quoted, quoted, quoted,
