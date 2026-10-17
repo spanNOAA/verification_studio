@@ -3,6 +3,7 @@ package mats
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -42,10 +43,11 @@ func (c *Client) FetchUpperAirDieoff(
 
 	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/upperair", models)
 	if err != nil {
-		fmt.Printf("  [UPPER AIR NOTICE] Failed to connect to MATS UpperAir: %v. Gracefully skipping.\n", err)
+		c.Log("  [UPPER AIR NOTICE] Failed to connect to MATS UpperAir: %v. Gracefully skipping.\n", err)
 		return nil
 	}
 	if len(validModels) == 0 {
+		c.Log("  [UPPER AIR WARNING] None of the requested models exist in MATS UpperAir database. Skipping.\n")
 		return nil
 	}
 
@@ -71,13 +73,13 @@ func (c *Client) FetchUpperAirDieoff(
 				onProgress(currentStep, totalSteps, fmt.Sprintf("Upper Air Dieoff (%s): %s", reg, v.MATSLabel))
 			}
 
-			if !forceFetch && isFileValid(outPath) {
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", fn)
-				continue
-			}
-
-			if err := c.fetchSingleUADieoff(validModels, uaDates, colorMap, regLabel, v.MATSLabel, outPath); err != nil {
-				fmt.Printf("  [WARNING] Failed to fetch UA Dieoff (%s, %s): %v. Skipping.\n", v.MATSLabel, reg, err)
+			if forceFetch || !isFileValid(outPath) {
+				if err := c.fetchSingleUADieoff(validModels, uaDates, colorMap, regLabel, v.MATSLabel, outPath); err != nil {
+					c.Log("  [UPPER AIR WARNING] Failed to fetch UA Dieoff (%s, %s): %v. Slot left empty.\n", v.MATSLabel, reg, err)
+					_ = os.Remove(outPath)
+				}
+			} else {
+				c.Log("  [CACHE HIT] Using cached: %s\n", fn)
 			}
 		}
 	}
@@ -224,10 +226,11 @@ func (c *Client) FetchUpperAirProfiles(
 
 	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/upperair", models)
 	if err != nil {
-		fmt.Printf("  [UPPER AIR PROFILE NOTICE] Failed to connect to MATS UpperAir: %v. Gracefully skipping.\n", err)
+		c.Log("  [UPPER AIR PROFILE NOTICE] Failed to connect to MATS UpperAir: %v. Gracefully skipping.\n", err)
 		return nil
 	}
 	if len(validModels) == 0 {
+		c.Log("  [UPPER AIR WARNING] None of the requested models exist in MATS UpperAir database. Skipping.\n")
 		return nil
 	}
 
@@ -253,13 +256,13 @@ func (c *Client) FetchUpperAirProfiles(
 				onProgress(currentStep, totalSteps, fmt.Sprintf("Upper Air Profile %sh (%s): %s", cfg.Fhr, reg, cfg.VarLabel))
 			}
 
-			if !forceFetch && isFileValid(outPath) {
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", fn)
-				continue
-			}
-
-			if err := c.fetchSingleUAProfile(validModels, uaDates, colorMap, regLabel, cfg, outPath); err != nil {
-				fmt.Printf("  [WARNING] Failed to fetch UA Profile (%s): %v. Skipping.\n", fn, err)
+			if forceFetch || !isFileValid(outPath) {
+				if err := c.fetchSingleUAProfile(validModels, uaDates, colorMap, regLabel, cfg, outPath); err != nil {
+					c.Log("  [UPPER AIR WARNING] Failed to fetch UA Profile (%s): %v. Slot left empty.\n", fn, err)
+					_ = os.Remove(outPath)
+				}
+			} else {
+				c.Log("  [CACHE HIT] Using cached: %s\n", fn)
 			}
 		}
 	}
@@ -378,10 +381,11 @@ func (c *Client) FetchUpperAirAMDAR(
 		Database: "AMDAR (Traditional)",
 	})
 	if err != nil {
-		fmt.Printf("  [AMDAR NOTICE] Could not query AMDAR database: %v. Gracefully skipping.\n", err)
+		c.Log("  [AMDAR NOTICE] Could not query AMDAR database: %v. Gracefully skipping.\n", err)
 		return nil
 	}
 	if len(validModels) == 0 {
+		c.Log("  [AMDAR WARNING] None of the requested models exist in MATS AMDAR database. Skipping.\n")
 		return nil
 	}
 
@@ -419,13 +423,13 @@ func (c *Client) FetchUpperAirAMDAR(
 			onProgress(currentStep, totalSteps, fmt.Sprintf("AMDAR Dieoff: %s", v.MATSLabel))
 		}
 
-		if !forceFetch && isFileValid(outPath) {
-			fmt.Printf("  [CACHE HIT] Using cached: %s\n", fn)
-			continue
-		}
-
-		if err := c.fetchSingleAMDARDieoff(validModels, uaDates, colorMap, v.MATSLabel, outPath); err != nil {
-			fmt.Printf("  [WARNING] Failed to fetch AMDAR Dieoff (%s): %v. Skipping.\n", v.MATSLabel, err)
+		if forceFetch || !isFileValid(outPath) {
+			if err := c.fetchSingleAMDARDieoff(validModels, uaDates, colorMap, v.MATSLabel, outPath); err != nil {
+				c.Log("  [AMDAR WARNING] Failed to fetch AMDAR Dieoff (%s): %v. Slot left empty.\n", v.MATSLabel, err)
+				_ = os.Remove(outPath)
+			}
+		} else {
+			c.Log("  [CACHE HIT] Using cached: %s\n", fn)
 		}
 	}
 
@@ -439,13 +443,13 @@ func (c *Client) FetchUpperAirAMDAR(
 			onProgress(currentStep, totalSteps, fmt.Sprintf("AMDAR Profile %sh: %s", cfg.Fhr, cfg.VarLabel))
 		}
 
-		if !forceFetch && isFileValid(outPath) {
-			fmt.Printf("  [CACHE HIT] Using cached: %s\n", fn)
-			continue
-		}
-
-		if err := c.fetchSingleAMDARProfile(validModels, uaDates, colorMap, cfg, outPath); err != nil {
-			fmt.Printf("  [WARNING] Failed to fetch AMDAR Profile (%s): %v. Skipping.\n", fn, err)
+		if forceFetch || !isFileValid(outPath) {
+			if err := c.fetchSingleAMDARProfile(validModels, uaDates, colorMap, cfg, outPath); err != nil {
+				c.Log("  [AMDAR WARNING] Failed to fetch AMDAR Profile (%s): %v. Slot left empty.\n", fn, err)
+				_ = os.Remove(outPath)
+			}
+		} else {
+			c.Log("  [CACHE HIT] Using cached: %s\n", fn)
 		}
 	}
 

@@ -3,6 +3,7 @@ package mats
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -48,10 +49,11 @@ func (c *Client) FetchReflectivity(
 		Variable: "Composite Reflectivity",
 	})
 	if err != nil {
-		fmt.Printf("  [RADAR NOTICE] Failed to connect to MATS Radar: %v. Gracefully skipping.\n", err)
+		c.Log("  [RADAR WARNING] Failed to connect to MATS Radar: %v. Skipping radar verification.\n", err)
 		return nil
 	}
 	if len(validModels) == 0 {
+		c.Log("  [RADAR WARNING] None of the requested models exist in MATS Radar database. Skipping radar verification.\n")
 		return nil
 	}
 
@@ -80,10 +82,11 @@ func (c *Client) FetchReflectivity(
 			}
 			if forceFetch || !isFileValid(outCSI) {
 				if err := c.fetchSingleRadarChart("Dieoff", regLabel, th.MATSValue, "CSI (Critical Success Index)", "", sfcDates, colorMap, validModels, outCSI); err != nil {
-					fmt.Printf("  [WARNING] Failed to fetch Radar CSI Dieoff (%s, %s): %v. Skipping.\n", th.Label, reg, err)
+					c.Log("  [RADAR WARNING] Failed to fetch Radar CSI Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
+					_ = os.Remove(outCSI)
 				}
 			} else {
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnCSI)
+				c.Log("  [CACHE HIT] Using cached: %s\n", fnCSI)
 			}
 
 			// Bias
@@ -95,10 +98,11 @@ func (c *Client) FetchReflectivity(
 			}
 			if forceFetch || !isFileValid(outBias) {
 				if err := c.fetchSingleRadarChart("Dieoff", regLabel, th.MATSValue, "Bias (Forecast / Actual)", "", sfcDates, colorMap, validModels, outBias); err != nil {
-					fmt.Printf("  [WARNING] Failed to fetch Radar Bias Dieoff (%s, %s): %v. Skipping.\n", th.Label, reg, err)
+					c.Log("  [RADAR WARNING] Failed to fetch Radar Bias Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
+					_ = os.Remove(outBias)
 				}
 			} else {
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnBias)
+				c.Log("  [CACHE HIT] Using cached: %s\n", fnBias)
 			}
 		}
 
@@ -114,10 +118,11 @@ func (c *Client) FetchReflectivity(
 				}
 				if forceFetch || !isFileValid(outCSI) {
 					if err := c.fetchSingleRadarChart("TimeSeries", regLabel, th.MATSValue, "CSI (Critical Success Index)", fhr, sfcDates, colorMap, validModels, outCSI); err != nil {
-						fmt.Printf("  [WARNING] Failed to fetch Radar %sh TS CSI (%s, %s): %v. Skipping.\n", fhr, th.Label, reg, err)
+						c.Log("  [RADAR WARNING] Failed to fetch Radar %sh TS CSI (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
+						_ = os.Remove(outCSI)
 					}
 				} else {
-					fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnCSI)
+					c.Log("  [CACHE HIT] Using cached: %s\n", fnCSI)
 				}
 
 				// TS Bias
@@ -129,10 +134,11 @@ func (c *Client) FetchReflectivity(
 				}
 				if forceFetch || !isFileValid(outBias) {
 					if err := c.fetchSingleRadarChart("TimeSeries", regLabel, th.MATSValue, "Bias (Forecast / Actual)", fhr, sfcDates, colorMap, validModels, outBias); err != nil {
-						fmt.Printf("  [WARNING] Failed to fetch Radar %sh TS Bias (%s, %s): %v. Skipping.\n", fhr, th.Label, reg, err)
+						c.Log("  [RADAR WARNING] Failed to fetch Radar %sh TS Bias (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
+						_ = os.Remove(outBias)
 					}
 				} else {
-					fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnBias)
+					c.Log("  [CACHE HIT] Using cached: %s\n", fnBias)
 				}
 			}
 		}
@@ -250,10 +256,11 @@ func (c *Client) FetchCeiling(
 		Variable: "Ceiling",
 	})
 	if err != nil {
-		fmt.Printf("  [CEILING NOTICE] Failed to query MATS Ceiling: %v. Gracefully skipping.\n", err)
+		c.Log("  [CEILING NOTICE] Failed to query MATS Ceiling: %v. Gracefully skipping.\n", err)
 		return nil
 	}
 	if len(validModels) == 0 {
+		c.Log("  [CEILING WARNING] None of the requested models exist in MATS Ceiling database. Skipping.\n")
 		return nil
 	}
 
@@ -281,10 +288,11 @@ func (c *Client) FetchCeiling(
 			}
 			if forceFetch || !isFileValid(outCSI) {
 				if err := c.fetchSingleCeilVisChart("Dieoff", "Ceiling", regLabel, th.MATSValue, "CSI (Critical Success Index)", "", sfcDates, colorMap, validModels, outCSI); err != nil {
-					fmt.Printf("  [WARNING] Failed to fetch Ceiling CSI Dieoff (%s, %s): %v. Skipping.\n", th.Label, reg, err)
+					c.Log("  [CEILING WARNING] Failed to fetch Ceiling CSI Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
+					_ = os.Remove(outCSI)
 				}
 			} else {
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnCSI)
+				c.Log("  [CACHE HIT] Using cached: %s\n", fnCSI)
 			}
 
 			// Bias
@@ -296,10 +304,11 @@ func (c *Client) FetchCeiling(
 			}
 			if forceFetch || !isFileValid(outBias) {
 				if err := c.fetchSingleCeilVisChart("Dieoff", "Ceiling", regLabel, th.MATSValue, "Bias (Forecast / Actual)", "", sfcDates, colorMap, validModels, outBias); err != nil {
-					fmt.Printf("  [WARNING] Failed to fetch Ceiling Bias Dieoff (%s, %s): %v. Skipping.\n", th.Label, reg, err)
+					c.Log("  [CEILING WARNING] Failed to fetch Ceiling Bias Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
+					_ = os.Remove(outBias)
 				}
 			} else {
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnBias)
+				c.Log("  [CACHE HIT] Using cached: %s\n", fnBias)
 			}
 		}
 
@@ -315,10 +324,11 @@ func (c *Client) FetchCeiling(
 				}
 				if forceFetch || !isFileValid(outCSI) {
 					if err := c.fetchSingleCeilVisChart("TimeSeries", "Ceiling", regLabel, th.MATSValue, "CSI (Critical Success Index)", fhr, sfcDates, colorMap, validModels, outCSI); err != nil {
-						fmt.Printf("  [WARNING] Failed to fetch Ceiling %sh TS CSI (%s, %s): %v. Skipping.\n", fhr, th.Label, reg, err)
+						c.Log("  [CEILING WARNING] Failed to fetch Ceiling %sh TS CSI (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
+						_ = os.Remove(outCSI)
 					}
 				} else {
-					fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnCSI)
+					c.Log("  [CACHE HIT] Using cached: %s\n", fnCSI)
 				}
 
 				// TS Bias
@@ -330,10 +340,11 @@ func (c *Client) FetchCeiling(
 				}
 				if forceFetch || !isFileValid(outBias) {
 					if err := c.fetchSingleCeilVisChart("TimeSeries", "Ceiling", regLabel, th.MATSValue, "Bias (Forecast / Actual)", fhr, sfcDates, colorMap, validModels, outBias); err != nil {
-						fmt.Printf("  [WARNING] Failed to fetch Ceiling %sh TS Bias (%s, %s): %v. Skipping.\n", fhr, th.Label, reg, err)
+						c.Log("  [CEILING WARNING] Failed to fetch Ceiling %sh TS Bias (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
+						_ = os.Remove(outBias)
 					}
 				} else {
-					fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnBias)
+					c.Log("  [CACHE HIT] Using cached: %s\n", fnBias)
 				}
 			}
 		}
@@ -374,10 +385,11 @@ func (c *Client) FetchVisibility(
 		Variable: "Visibility",
 	})
 	if err != nil {
-		fmt.Printf("  [VISIBILITY NOTICE] Failed to query MATS Visibility: %v. Gracefully skipping.\n", err)
+		c.Log("  [VISIBILITY NOTICE] Failed to query MATS Visibility: %v. Gracefully skipping.\n", err)
 		return nil
 	}
 	if len(validModels) == 0 {
+		c.Log("  [VISIBILITY WARNING] None of the requested models exist in MATS Visibility database. Skipping.\n")
 		return nil
 	}
 
@@ -405,10 +417,11 @@ func (c *Client) FetchVisibility(
 			}
 			if forceFetch || !isFileValid(outCSI) {
 				if err := c.fetchSingleCeilVisChart("Dieoff", "Visibility", regLabel, th.MATSValue, "CSI (Critical Success Index)", "", sfcDates, colorMap, validModels, outCSI); err != nil {
-					fmt.Printf("  [WARNING] Failed to fetch Visibility CSI Dieoff (%s, %s): %v. Skipping.\n", th.Label, reg, err)
+					c.Log("  [VISIBILITY WARNING] Failed to fetch Visibility CSI Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
+					_ = os.Remove(outCSI)
 				}
 			} else {
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnCSI)
+				c.Log("  [CACHE HIT] Using cached: %s\n", fnCSI)
 			}
 
 			// Bias
@@ -420,10 +433,11 @@ func (c *Client) FetchVisibility(
 			}
 			if forceFetch || !isFileValid(outBias) {
 				if err := c.fetchSingleCeilVisChart("Dieoff", "Visibility", regLabel, th.MATSValue, "Bias (Forecast / Actual)", "", sfcDates, colorMap, validModels, outBias); err != nil {
-					fmt.Printf("  [WARNING] Failed to fetch Visibility Bias Dieoff (%s, %s): %v. Skipping.\n", th.Label, reg, err)
+					c.Log("  [VISIBILITY WARNING] Failed to fetch Visibility Bias Dieoff (%s, %s): %v. Slot left empty.\n", th.Label, reg, err)
+					_ = os.Remove(outBias)
 				}
 			} else {
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnBias)
+				c.Log("  [CACHE HIT] Using cached: %s\n", fnBias)
 			}
 		}
 
@@ -439,10 +453,11 @@ func (c *Client) FetchVisibility(
 				}
 				if forceFetch || !isFileValid(outCSI) {
 					if err := c.fetchSingleCeilVisChart("TimeSeries", "Visibility", regLabel, th.MATSValue, "CSI (Critical Success Index)", fhr, sfcDates, colorMap, validModels, outCSI); err != nil {
-						fmt.Printf("  [WARNING] Failed to fetch Visibility %sh TS CSI (%s, %s): %v. Skipping.\n", fhr, th.Label, reg, err)
+						c.Log("  [VISIBILITY WARNING] Failed to fetch Visibility %sh TS CSI (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
+						_ = os.Remove(outCSI)
 					}
 				} else {
-					fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnCSI)
+					c.Log("  [CACHE HIT] Using cached: %s\n", fnCSI)
 				}
 
 				// TS Bias
@@ -454,10 +469,11 @@ func (c *Client) FetchVisibility(
 				}
 				if forceFetch || !isFileValid(outBias) {
 					if err := c.fetchSingleCeilVisChart("TimeSeries", "Visibility", regLabel, th.MATSValue, "Bias (Forecast / Actual)", fhr, sfcDates, colorMap, validModels, outBias); err != nil {
-						fmt.Printf("  [WARNING] Failed to fetch Visibility %sh TS Bias (%s, %s): %v. Skipping.\n", fhr, th.Label, reg, err)
+						c.Log("  [VISIBILITY WARNING] Failed to fetch Visibility %sh TS Bias (%s, %s): %v. Slot left empty.\n", fhr, th.Label, reg, err)
+						_ = os.Remove(outBias)
 					}
 				} else {
-					fmt.Printf("  [CACHE HIT] Using cached: %s\n", fnBias)
+					c.Log("  [CACHE HIT] Using cached: %s\n", fnBias)
 				}
 			}
 		}

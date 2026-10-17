@@ -43,10 +43,11 @@ func (c *Client) FetchSurfaceDieoff(
 
 	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/surface", models)
 	if err != nil {
-		fmt.Printf("  [SURFACE NOTICE] Failed to connect to MATS Surface: %v. Gracefully skipping.\n", err)
+		c.Log("  [SURFACE WARNING] Failed to connect to MATS Surface: %v. Gracefully skipping.\n", err)
 		return nil
 	}
 	if len(validModels) == 0 {
+		c.Log("  [SURFACE WARNING] None of the requested models exist in MATS Surface database. Skipping.\n")
 		return nil
 	}
 
@@ -73,12 +74,13 @@ func (c *Client) FetchSurfaceDieoff(
 			}
 
 			if !forceFetch && isFileValid(outPath) {
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", fn)
+				c.Log("  [CACHE HIT] Using cached: %s\n", fn)
 				continue
 			}
 
 			if err := c.fetchSingleSurfaceDieoff(validModels, sfcDates, colorMap, regLabel, v.MATSLabel, outPath); err != nil {
-				fmt.Printf("  [WARNING] Failed to fetch Surface Dieoff (%s, %s): %v. Skipping.\n", v.MATSLabel, reg, err)
+				c.Log("  [SURFACE WARNING] Failed to fetch Surface Dieoff (%s, %s): %v. Slot left empty.\n", v.MATSLabel, reg, err)
+				_ = os.Remove(outPath)
 			}
 		}
 	}

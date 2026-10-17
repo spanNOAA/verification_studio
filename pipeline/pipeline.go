@@ -241,6 +241,13 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 	// Setup directories
 	matsDir := filepath.Join(req.OutputDir, "mats")
 	crefDir := filepath.Join(req.OutputDir, "cref")
+	if req.ForceFetch && !req.SkipFetch {
+		log("[FORCE REFRESH] 🔄 Force refresh enabled: invalidating all cached charts to ensure clean, fresh evaluation...\n")
+		_ = os.RemoveAll(matsDir)
+		if req.IncludeCref {
+			_ = os.RemoveAll(crefDir)
+		}
+	}
 	if err := os.MkdirAll(matsDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create mats directory: %w", err)
 	}
@@ -268,6 +275,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 	log("  Browser running: %s\n\n", session.Path())
 
 	matsClient := mats.NewClient(session)
+	matsClient.SetLogger(func(s string) { log("%s", s) })
 	mrmsClient := mrms.NewClient(session)
 
 	// Calculate dynamic stage weights

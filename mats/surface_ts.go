@@ -3,6 +3,7 @@ package mats
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -70,10 +71,11 @@ func (c *Client) FetchSurfaceTimeSeries(
 
 	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/surface", models)
 	if err != nil {
-		fmt.Printf("  [SURFACE TS NOTICE] Failed to connect to MATS Surface: %v. Gracefully skipping.\n", err)
+		c.Log("  [SURFACE TS WARNING] Failed to connect to MATS Surface: %v. Gracefully skipping.\n", err)
 		return nil
 	}
 	if len(validModels) == 0 {
+		c.Log("  [SURFACE TS WARNING] None of the requested models exist in MATS Surface database. Skipping.\n")
 		return nil
 	}
 
@@ -100,12 +102,13 @@ func (c *Client) FetchSurfaceTimeSeries(
 			}
 
 			if !forceFetch && isFileValid(outPath) {
-				fmt.Printf("  [CACHE HIT] Using cached: %s\n", fn)
+				c.Log("  [CACHE HIT] Using cached: %s\n", fn)
 				continue
 			}
 
 			if err := c.fetchSingleSurfaceTimeSeries(validModels, sfcDates, colorMap, regLabel, cfg, outPath); err != nil {
-				fmt.Printf("  [WARNING] Failed to fetch Surface TS (%s): %v. Skipping.\n", fn, err)
+				c.Log("  [SURFACE TS WARNING] Failed to fetch Surface TS (%s): %v. Slot left empty.\n", fn, err)
+				_ = os.Remove(outPath)
 			}
 		}
 	}

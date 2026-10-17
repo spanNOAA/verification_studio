@@ -17,11 +17,27 @@ import (
 // Client handles automated interaction with NOAA GSL MATS web applications.
 type Client struct {
 	session *browser.Session
+	logger  func(string)
 }
 
 // NewClient initializes a MATS automation client with a browser session.
 func NewClient(session *browser.Session) *Client {
 	return &Client{session: session}
+}
+
+// SetLogger configures an optional real-time logging sink for operational messages.
+func (c *Client) SetLogger(fn func(string)) {
+	c.logger = fn
+}
+
+// Log outputs a formatted operational message to the registered logger or standard output.
+func (c *Client) Log(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if c.logger != nil {
+		c.logger(msg)
+	} else {
+		fmt.Print(msg)
+	}
 }
 
 // CheckAvailableModels navigates to a MATS page and verifies which models exist in the data-source dropdown.
@@ -97,7 +113,7 @@ func (c *Client) CheckAvailableModels(ctx context.Context, pageURL string, model
 				}
 			}
 			if !found {
-				fmt.Printf("  [NOTICE] Model %s (%s) not found in MATS database at %s. Skipping.\n", m.Name, m.ID, pageURL)
+				c.Log("  [NOTICE] Model %s (%s) not found in MATS database at %s. Skipping.\n", m.Name, m.ID, pageURL)
 			}
 		}
 	}
