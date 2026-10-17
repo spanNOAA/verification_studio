@@ -799,10 +799,12 @@ const htmlTemplate = `<!DOCTYPE html>
     /* 3-Panel Slide Layout */
     .grid-3panel {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
       gap: 10px;
       flex: 1;
+      min-height: 0;
+      min-width: 0;
       position: relative;
     }
     .panel-box {
@@ -814,8 +816,17 @@ const htmlTemplate = `<!DOCTYPE html>
       display: flex;
       align-items: center;
       justify-content: center;
+      min-height: 0;
+      min-width: 0;
     }
-    .panel-box img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; }
+    .panel-box img {
+      width: auto;
+      height: auto;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      cursor: zoom-in;
+    }
     .panel-label {
       position: absolute;
       top: 6px; left: 8px;
@@ -837,6 +848,8 @@ const htmlTemplate = `<!DOCTYPE html>
       gap: 6px;
       font-size: 12px;
       justify-content: center;
+      min-height: 0;
+      min-width: 0;
     }
     .legend-title { font-weight: 700; color: #1e293b; margin-bottom: 2px; }
     .legend-subtitle { font-weight: 700; color: #475569; margin-top: 4px; }
@@ -848,18 +861,22 @@ const htmlTemplate = `<!DOCTYPE html>
       display: flex;
       gap: 12px;
       flex: 1;
-      height: calc(100% - 32px);
+      min-height: 0;
+      min-width: 0;
     }
     .ts-main-grid {
       flex: 1;
       display: flex;
       flex-direction: column;
       gap: 6px;
+      min-height: 0;
+      min-width: 0;
       height: 100%;
     }
     .ts-header-row {
       display: flex;
       height: 24px;
+      flex-shrink: 0;
       font-size: 15px;
       font-weight: 700;
       color: #102c57;
@@ -872,6 +889,8 @@ const htmlTemplate = `<!DOCTYPE html>
       flex: 1;
       gap: 8px;
       align-items: center;
+      min-height: 0;
+      min-width: 0;
     }
     .ts-row-label {
       width: 90px;
@@ -892,8 +911,17 @@ const htmlTemplate = `<!DOCTYPE html>
       display: flex;
       align-items: center;
       justify-content: center;
+      min-height: 0;
+      min-width: 0;
     }
-    .ts-img-box img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; }
+    .ts-img-box img {
+      width: auto;
+      height: auto;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      cursor: zoom-in;
+    }
     .ts-legend-sidebar {
       width: 170px;
       background: #ffffff;
@@ -905,29 +933,37 @@ const htmlTemplate = `<!DOCTYPE html>
       flex-direction: column;
       gap: 6px;
       flex-shrink: 0;
+      min-height: 0;
     }
 
     /* Profile Layout */
     .grid-profile {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
       gap: 10px;
       flex: 1;
+      min-height: 0;
+      min-width: 0;
     }
     .grid-profile-amdar {
       display: flex;
       gap: 12px;
       flex: 1;
+      min-height: 0;
+      min-width: 0;
       height: 100%;
     }
     .grid-profile-amdar .profile-box {
       flex: 1;
       height: 100%;
+      min-height: 0;
+      min-width: 0;
     }
     .grid-profile-amdar .profile-amdar-legend {
       flex: 0 0 180px;
       height: 100%;
+      min-height: 0;
     }
     .profile-box {
       position: relative;
@@ -938,8 +974,17 @@ const htmlTemplate = `<!DOCTYPE html>
       align-items: center;
       justify-content: center;
       background: #f8fafc;
+      min-height: 0;
+      min-width: 0;
     }
-    .profile-box img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; }
+    .profile-box img {
+      width: auto;
+      height: auto;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      cursor: zoom-in;
+    }
     .profile-label {
       position: absolute;
       top: 6px; left: 10px;
@@ -955,10 +1000,12 @@ const htmlTemplate = `<!DOCTYPE html>
     /* Radar Cases Layout */
     .radar-case-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      grid-template-rows: 1fr 1fr;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
       gap: 10px;
       flex: 1;
+      min-height: 0;
+      min-width: 0;
     }
     .case-box {
       position: relative;
@@ -969,8 +1016,17 @@ const htmlTemplate = `<!DOCTYPE html>
       align-items: center;
       justify-content: center;
       background: #f8fafc;
+      min-height: 0;
+      min-width: 0;
     }
-    .case-box img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; }
+    .case-box img {
+      width: auto;
+      height: auto;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      cursor: zoom-in;
+    }
     .case-label {
       position: absolute;
       top: 4px; left: 6px;

@@ -209,6 +209,19 @@ jobs:
           name: windows-packages
           path: dist
 
+      - name: Purge Obsolete Release Assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TARGET_TAG="${{ github.ref_name }}"
+          if [ -z "$TARGET_TAG" ] || [ "$TARGET_TAG" = "main" ]; then
+            TARGET_TAG="${{ github.event.inputs.version }}"
+          fi
+          if [ -n "$TARGET_TAG" ]; then
+            echo "Checking and deleting obsolete assets from tag: $TARGET_TAG"
+            gh release delete-asset "$TARGET_TAG" "Verification_Studio_Windows_x64.zip" -y || true
+          fi
+
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2
         with:
