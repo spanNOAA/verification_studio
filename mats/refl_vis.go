@@ -42,10 +42,7 @@ func (c *Client) FetchReflectivity(
 		regions = []string{"all"}
 	}
 
-	tabCtx, cancel := c.session.NewTab(60 * time.Second)
-	defer cancel()
-
-	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/radar", models, CheckOptions{
+	validModels, err := c.CheckAvailableModels(ctx, "https://gsl.noaa.gov/mats/radar", models, CheckOptions{
 		Variable: "Composite Reflectivity",
 	})
 	if err != nil {
@@ -260,10 +257,7 @@ func (c *Client) FetchCeiling(
 		regions = []string{"all"}
 	}
 
-	tabCtx, cancel := c.session.NewTab(60 * time.Second)
-	defer cancel()
-
-	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/ceil-vis", models, CheckOptions{
+	validModels, err := c.CheckAvailableModels(ctx, "https://gsl.noaa.gov/mats/ceil-vis", models, CheckOptions{
 		Variable: "Ceiling",
 	})
 	if err != nil {
@@ -401,10 +395,7 @@ func (c *Client) FetchVisibility(
 		regions = []string{"all"}
 	}
 
-	tabCtx, cancel := c.session.NewTab(60 * time.Second)
-	defer cancel()
-
-	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/ceil-vis", models, CheckOptions{
+	validModels, err := c.CheckAvailableModels(ctx, "https://gsl.noaa.gov/mats/ceil-vis", models, CheckOptions{
 		Variable: "Visibility",
 	})
 	if err != nil {

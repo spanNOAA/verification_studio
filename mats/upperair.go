@@ -38,10 +38,7 @@ func (c *Client) FetchUpperAirDieoff(
 		regions = []string{"all"}
 	}
 
-	tabCtx, cancel := c.session.NewTab(60 * time.Second)
-	defer cancel()
-
-	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/upperair", models)
+	validModels, err := c.CheckAvailableModels(ctx, "https://gsl.noaa.gov/mats/upperair", models)
 	if err != nil {
 		c.Log("  [UPPER AIR NOTICE] Failed to connect to MATS UpperAir: %v. Gracefully skipping.\n", err)
 		return nil
@@ -223,10 +220,7 @@ func (c *Client) FetchUpperAirProfiles(
 		regions = []string{"all"}
 	}
 
-	tabCtx, cancel := c.session.NewTab(60 * time.Second)
-	defer cancel()
-
-	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/upperair", models)
+	validModels, err := c.CheckAvailableModels(ctx, "https://gsl.noaa.gov/mats/upperair", models)
 	if err != nil {
 		c.Log("  [UPPER AIR PROFILE NOTICE] Failed to connect to MATS UpperAir: %v. Gracefully skipping.\n", err)
 		return nil
@@ -378,10 +372,7 @@ func (c *Client) FetchUpperAirAMDAR(
 	forceFetch bool,
 	onProgress func(current, total int, message string),
 ) error {
-	tabCtx, cancel := c.session.NewTab(60 * time.Second)
-	defer cancel()
-
-	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/upperair", models, CheckOptions{
+	validModels, err := c.CheckAvailableModels(ctx, "https://gsl.noaa.gov/mats/upperair", models, CheckOptions{
 		Database: "AMDAR (Traditional)",
 	})
 	if err != nil {

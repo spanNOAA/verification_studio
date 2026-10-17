@@ -59,12 +59,9 @@ func (c *Client) Log(format string, args ...any) {
 // OpenMATSPage navigates to a MATS page and verifies the UI initializes cleanly.
 // It fails fast if the page returns HTTP 404, hangs, or encounters a Cloudflare challenge.
 func (c *Client) OpenMATSPage(ctx context.Context, pageURL string) error {
-	navCtx, navCancel := context.WithTimeout(ctx, 25*time.Second)
-	defer navCancel()
-
-	if err := chromedp.Do(navCtx, chromedp.Navigate(pageURL)); err != nil {
+	if err := chromedp.Do(ctx, chromedp.Navigate(pageURL)); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "deadline exceeded") {
-			return fmt.Errorf("%w: failed to navigate to %s within 25s: %v", ErrRateLimited, pageURL, err)
+			return fmt.Errorf("%w: failed to navigate to %s: %v", ErrRateLimited, pageURL, err)
 		}
 		return fmt.Errorf("failed to navigate to %s: %w", pageURL, err)
 	}
@@ -200,90 +197,88 @@ func (c *Client) RetryFetch(tag string, maxAttempts int, backoff time.Duration, 
 
 // CheckAvailableModels navigates to a MATS page and verifies which models exist in the data-source dropdown.
 func (c *Client) CheckAvailableModels(ctx context.Context, pageURL string, models []Model, opts ...CheckOptions) ([]Model, error) {
-	var openErr error
-	for attempt := 1; attempt <= 2; attempt++ {
-		openErr = c.OpenMATSPage(ctx, pageURL)
-		if openErr == nil {
-			break
-		}
-		if attempt < 2 && isRateLimited(openErr) {
-			c.Log("  [RATE LIMIT] Pre-check for %s hit traffic throttling (%v). Entering 3-minute cooldown...\n", pageURL, openErr)
-			_ = c.CooldownAndRestart(context.Background(), 3*time.Minute)
-		}
-	}
-	if openErr != nil {
-		return nil, fmt.Errorf("failed to open MATS page %s: %w", pageURL, openErr)
-	}
-
-	time.Sleep(1500 * time.Millisecond)
-
-	var opt CheckOptions
-	if len(opts) > 0 {
-		opt = opts[0]
-	}
-
-	if opt.Database != "" {
-		_ = chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`(() => {
-			if (window.matsParamUtils) {
-				matsParamUtils.setInputValueForParamAndTriggerChange('database', '%s');
-			}
-		})()`, opt.Database)))
-		time.Sleep(1000 * time.Millisecond)
-	}
-
-	if opt.Variable != "" {
-		_ = chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`(() => {
-			if (window.matsParamUtils) {
-				matsParamUtils.setInputValueForParamAndTriggerChange('variable', '%s');
-			}
-		})()`, opt.Variable)))
-		time.Sleep(1000 * time.Millisecond)
-	}
-
-	var optionsJSON string
-	script := `(() => {
-		const sel = document.getElementById('data-source') || document.querySelector('select[name="data-source"]');
-		if (!sel) return JSON.stringify([]);
-		const opts = Array.from(sel.options).map(o => o.value || o.text);
-		return JSON.stringify(opts);
-	})()`
-
-	var err error
-	optionsJSON, err = chromedp.Run(ctx, chromedp.Evaluate[string](script))
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve available models: %w", err)
-	}
-
-	var available []string
-	if err := json.Unmarshal([]byte(optionsJSON), &available); err != nil {
-		return nil, fmt.Errorf("failed to parse available options: %w", err)
-	}
-
-	availMap := make(map[string]bool)
-	for _, a := range available {
-		availMap[strings.TrimSpace(a)] = true
-	}
-
 	var valid []Model
-	for _, m := range models {
-		if availMap[m.ID] || availMap[m.Name] {
-			valid = append(valid, m)
-		} else {
-			// Check case-insensitive
-			found := false
-			for a := range availMap {
-				if strings.EqualFold(a, m.ID) || strings.EqualFold(a, m.Name) {
-					valid = append(valid, m)
-					found = true
-					break
+	err := c.RetryFetch(pageURL+" precheck", 2, 2*time.Second, func() error {
+		tabCtx, cancel := c.session.NewTab(45 * time.Second)
+		defer cancel()
+
+		if err := c.OpenMATSPage(tabCtx, pageURL); err != nil {
+			return err
+		}
+
+		time.Sleep(1500 * time.Millisecond)
+
+		var opt CheckOptions
+		if len(opts) > 0 {
+			opt = opts[0]
+		}
+
+		if opt.Database != "" {
+			_ = chromedp.Do(tabCtx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`(() => {
+				if (window.matsParamUtils) {
+					matsParamUtils.setInputValueForParamAndTriggerChange('database', '%s');
+				}
+			})()`, opt.Database)))
+			time.Sleep(1000 * time.Millisecond)
+		}
+
+		if opt.Variable != "" {
+			_ = chromedp.Do(tabCtx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`(() => {
+				if (window.matsParamUtils) {
+					matsParamUtils.setInputValueForParamAndTriggerChange('variable', '%s');
+				}
+			})()`, opt.Variable)))
+			time.Sleep(1000 * time.Millisecond)
+		}
+
+		script := `(() => {
+			const sel = document.getElementById('data-source') || document.querySelector('select[name="data-source"]');
+			if (!sel) return JSON.stringify([]);
+			const opts = Array.from(sel.options).map(o => o.value || o.text);
+			return JSON.stringify(opts);
+		})()`
+
+		optionsJSON, err := chromedp.Run(tabCtx, chromedp.Evaluate[string](script))
+		if err != nil {
+			return fmt.Errorf("failed to retrieve available models: %w", err)
+		}
+
+		var available []string
+		if err := json.Unmarshal([]byte(optionsJSON), &available); err != nil {
+			return fmt.Errorf("failed to parse available options: %w", err)
+		}
+
+		availMap := make(map[string]bool)
+		for _, a := range available {
+			availMap[strings.TrimSpace(a)] = true
+		}
+
+		valid = nil
+		for _, m := range models {
+			if availMap[m.ID] || availMap[m.Name] {
+				valid = append(valid, m)
+			} else {
+				// Check case-insensitive
+				found := false
+				for a := range availMap {
+					if strings.EqualFold(a, m.ID) || strings.EqualFold(a, m.Name) {
+						valid = append(valid, m)
+						found = true
+						break
+					}
+				}
+				if !found {
+					c.Log("  [NOTICE] Model %s (%s) not found in MATS database at %s. Skipping.\n", m.Name, m.ID, pageURL)
 				}
 			}
-			if !found {
-				c.Log("  [NOTICE] Model %s (%s) not found in MATS database at %s. Skipping.\n", m.Name, m.ID, pageURL)
-			}
 		}
-	}
 
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
 	return valid, nil
 }
 

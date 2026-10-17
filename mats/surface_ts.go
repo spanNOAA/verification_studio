@@ -66,10 +66,7 @@ func (c *Client) FetchSurfaceTimeSeries(
 		regions = []string{"all"}
 	}
 
-	tabCtx, cancel := c.session.NewTab(60 * time.Second)
-	defer cancel()
-
-	validModels, err := c.CheckAvailableModels(tabCtx, "https://gsl.noaa.gov/mats/surface", models)
+	validModels, err := c.CheckAvailableModels(ctx, "https://gsl.noaa.gov/mats/surface", models)
 	if err != nil {
 		c.Log("  [SURFACE TS WARNING] Failed to connect to MATS Surface: %v. Gracefully skipping.\n", err)
 		return nil
