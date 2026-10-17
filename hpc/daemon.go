@@ -139,7 +139,7 @@ func (d *Daemon) StartSessionHeadless() error {
 		if n > 0 {
 			buf = append(buf, readBuf[:n]...)
 			cleaned := ansiCleaner.ReplaceAll(buf, []byte(""))
-			if d.promptRegex.Match(buf) || d.promptRegex.Match(cleaned) || GenericPromptRegex.Match(buf) {
+			if IsPromptDetected(buf, cleaned, d.promptRegex) {
 				time.Sleep(300 * time.Millisecond)
 				d.Log("Prompt detected! Read-only session to %s established.", strings.ToUpper(d.Cluster))
 

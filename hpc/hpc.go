@@ -105,15 +105,23 @@ func IsOnline(cluster string) bool {
 	return online
 }
 
-// EnsureConnection checks if target cluster is online. If offline, prompts the user via a terminal script.
-func EnsureConnection(cluster string, models []mats.Model) bool {
+// EnsureConnection checks if target cluster is online. If offline, attempts headless background connection
+// first (leveraging active SSH ControlMaster). If interactive authentication is required, launches a terminal.
+func EnsureConnection(cluster string, models []mats.Model, logger ...func(string)) bool {
+	var logMsg func(string)
+	if len(logger) > 0 && logger[0] != nil {
+		logMsg = logger[0]
+	} else {
+		logMsg = func(s string) { fmt.Print(s) }
+	}
+
 	target := NormalizeCluster(cluster, "")
 	if target == "gaea" {
 		target = "gaea-c5"
 	}
 
 	if !ValidClusters[target] {
-		fmt.Printf("[ERROR] Unsupported HPC cluster target: %s\n", target)
+		logMsg(fmt.Sprintf("  [HPC ERROR] Unsupported HPC cluster target: %s\n", target))
 		return false
 	}
 
@@ -123,31 +131,45 @@ func EnsureConnection(cluster string, models []mats.Model) bool {
 
 	suggestedUser := findSuggestedUser(target, models)
 
-	fmt.Printf("\n[HPC] Cluster '%s' is offline or requires authentication.\n", target)
-	fmt.Printf("[HPC] Launching interactive Terminal for PIN + YubiKey authentication...\n")
-
 	selfExe, err := os.Executable()
 	if err != nil {
 		selfExe = os.Args[0]
 	}
 
+	// Step 1: Attempt headless background connection first (in case SSH ControlMaster is active)
+	logMsg(fmt.Sprintf("  [HPC] Cluster '%s' is offline. Attempting automatic session connection...\n", target))
+	if err := StartBackgroundWorker(target, suggestedUser); err == nil {
+		tHeadless := time.Now()
+		for time.Since(tHeadless) < 8*time.Second {
+			if IsOnline(target) {
+				logMsg(fmt.Sprintf("  [HPC] >>> Successfully connected to %s via active session!\n", target))
+				return true
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+
+	// Step 2: Headless connection did not succeed (interactive PIN/YubiKey needed)
+	logMsg(fmt.Sprintf("  [HPC] Cluster '%s' requires PIN + YubiKey authentication. Launching Terminal...\n", target))
+	logMsg("  [HPC] Please enter your credentials in the Terminal window to continue...\n")
+
 	cleanup, err := launchAuthTerminal(target, suggestedUser, selfExe)
 	if err != nil {
-		fmt.Printf("[HPC] Failed to launch authentication terminal: %v\n", err)
+		logMsg(fmt.Sprintf("  [HPC ERROR] Failed to launch authentication terminal: %v\n", err))
 		return false
 	}
 	defer cleanup()
 
 	t0 := time.Now()
-	for time.Since(t0) < 90*time.Second {
+	for time.Since(t0) < 120*time.Second {
 		if IsOnline(target) {
-			fmt.Printf("[HPC] >>> Successfully connected to %s!\n", target)
+			logMsg(fmt.Sprintf("  [HPC] >>> Prompt detected! Successfully connected to %s.\n", target))
 			return true
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	fmt.Printf("[HPC] Authentication timed out after 90s.\n")
+	logMsg(fmt.Sprintf("  [HPC ERROR] Authentication for cluster '%s' timed out after 120s.\n", target))
 	return false
 }
 
@@ -237,7 +259,7 @@ func DownloadRadarImages(
 
 		if isRemote {
 			if !IsOnline(cluster) {
-				if !EnsureConnection(cluster, models) || !IsOnline(cluster) {
+				if !EnsureConnection(cluster, models, logMsg) || !IsOnline(cluster) {
 					logMsg(fmt.Sprintf("  [HPC NOTICE] Cluster '%s' is offline. Skipping remote radar retrieval for [%s].\n", cluster, shortName))
 					currentItem += len(needed)
 					if onProgress != nil {

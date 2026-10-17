@@ -28,18 +28,11 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 		candidateUser = ResolveCandidateUser(clusterKey, "")
 	}
 
-	// Interactive username prompt with recommended default
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("Enter your HPC username for [%s]", strings.ToUpper(clusterKey))
-	if candidateUser != "" {
-		fmt.Printf(" [%s]", candidateUser)
-	}
-	fmt.Printf(": ")
-
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(input)
-	if input != "" {
-		candidateUser = input
+	if candidateUser == "" {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Enter your HPC username for [%s]: ", strings.ToUpper(clusterKey))
+		input, _ := reader.ReadString('\n')
+		candidateUser = strings.TrimSpace(input)
 	}
 	if candidateUser != "" {
 		_ = SaveConfirmedUser(clusterKey, candidateUser)
@@ -67,24 +60,7 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 	fmt.Printf("\n\n[%s] >>> Authentication completed successfully! <<<\n", strings.ToUpper(clusterKey))
 	fmt.Printf("[%s] Launching background read-only session daemon...\n", strings.ToUpper(clusterKey))
 
-	selfExe, err := os.Executable()
-	if err != nil {
-		selfExe = os.Args[0]
-	}
-
-	_, _, logPath, _ := GetClusterPaths(clusterKey)
-	logF, _ := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-
-	workerCmd := exec.Command(selfExe, "hpc-worker", clusterKey, "--user", candidateUser)
-	workerCmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
-	}
-	if logF != nil {
-		workerCmd.Stdout = logF
-		workerCmd.Stderr = logF
-	}
-
-	if err := workerCmd.Start(); err != nil {
+	if err := StartBackgroundWorker(clusterKey, candidateUser); err != nil {
 		return fmt.Errorf("failed to start background daemon worker: %w", err)
 	}
 
@@ -100,4 +76,26 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 	}
 
 	return fmt.Errorf("timed out waiting for background daemon socket to become ready")
+}
+
+// StartBackgroundWorker launches a detached hpc-worker process in the background on Windows.
+func StartBackgroundWorker(cluster, candidateUser string) error {
+	selfExe, err := os.Executable()
+	if err != nil {
+		selfExe = os.Args[0]
+	}
+
+	_, _, logPath, _ := GetClusterPaths(cluster)
+	logF, _ := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+
+	workerCmd := exec.Command(selfExe, "hpc-worker", cluster, "--user", candidateUser)
+	workerCmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+	}
+	if logF != nil {
+		workerCmd.Stdout = logF
+		workerCmd.Stderr = logF
+	}
+
+	return workerCmd.Start()
 }

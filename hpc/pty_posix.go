@@ -4,6 +4,7 @@ package hpc
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -34,18 +35,11 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 		candidateUser = ResolveCandidateUser(clusterKey, "")
 	}
 
-	// Interactive username prompt with recommended default
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("Enter your HPC username for [%s]", strings.ToUpper(clusterKey))
-	if candidateUser != "" {
-		fmt.Printf(" [%s]", candidateUser)
-	}
-	fmt.Printf(": ")
-
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(input)
-	if input != "" {
-		candidateUser = input
+	if candidateUser == "" {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Enter your HPC username for [%s]: ", strings.ToUpper(clusterKey))
+		input, _ := reader.ReadString('\n')
+		candidateUser = strings.TrimSpace(input)
 	}
 	if candidateUser != "" {
 		_ = SaveConfirmedUser(clusterKey, candidateUser)
@@ -97,7 +91,13 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 			buf = append(buf, readBuf[:n]...)
 
 			cleaned := ansiCleaner.ReplaceAll(buf, []byte(""))
-			if cfg.PromptRegex.Match(buf) || cfg.PromptRegex.Match(cleaned) || GenericPromptRegex.Match(buf) {
+
+			// Give shell adequate initialization time once login banner is observed
+			if bytes.Contains(cleaned, []byte("Last login:")) && time.Since(startTime) > 30*time.Second {
+				startTime = time.Now().Add(-30 * time.Second)
+			}
+
+			if IsPromptDetected(buf, cleaned, cfg.PromptRegex) {
 				time.Sleep(300 * time.Millisecond)
 				authenticated = true
 				break
@@ -120,22 +120,7 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 	fmt.Printf("[%s] Launching background read-only session daemon...\n", strings.ToUpper(clusterKey))
 
 	// Spawn background worker process detached from current terminal
-	selfExe, err := os.Executable()
-	if err != nil {
-		selfExe = os.Args[0]
-	}
-
-	_, _, logPath, _ := GetClusterPaths(clusterKey)
-	logF, _ := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-
-	workerCmd := exec.Command(selfExe, "hpc-worker", clusterKey, "--user", candidateUser)
-	workerCmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if logF != nil {
-		workerCmd.Stdout = logF
-		workerCmd.Stderr = logF
-	}
-
-	if err := workerCmd.Start(); err != nil {
+	if err := StartBackgroundWorker(clusterKey, candidateUser); err != nil {
 		return fmt.Errorf("failed to start background daemon worker: %w", err)
 	}
 
@@ -167,4 +152,24 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 		errMsg += fmt.Sprintf(" (connection error: %v)", lastErr)
 	}
 	return fmt.Errorf("%s", errMsg)
+}
+
+// StartBackgroundWorker launches a detached hpc-worker process in the background.
+func StartBackgroundWorker(cluster, candidateUser string) error {
+	selfExe, err := os.Executable()
+	if err != nil {
+		selfExe = os.Args[0]
+	}
+
+	_, _, logPath, _ := GetClusterPaths(cluster)
+	logF, _ := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+
+	workerCmd := exec.Command(selfExe, "hpc-worker", cluster, "--user", candidateUser)
+	workerCmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if logF != nil {
+		workerCmd.Stdout = logF
+		workerCmd.Stderr = logF
+	}
+
+	return workerCmd.Start()
 }

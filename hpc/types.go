@@ -2,6 +2,7 @@ package hpc
 
 import (
 	"regexp"
+	"strings"
 )
 
 // ProtocolVersion defines the enforced read-only communication protocol version.
@@ -63,7 +64,7 @@ var Clusters = map[string]ClusterInfo{
 		AliasCandidates: []string{"Gaeac5", "gaea-c5", "gaeac5", "c5", "Gaea", "gaea"},
 		Description:     "NOAA RDHPCS Gaea C5 (gaea51~56, /gpfs/f5)",
 		TimeoutInit:     60,
-		PromptRegex:     regexp.MustCompile(`([a-zA-Z0-9_\.\-]+@gaea\d+:.*?>|gaea\d+:.*?>|\[[a-zA-Z0-9_\.\-]+@gaea\d+.*?\][$#>]|:~>)`),
+		PromptRegex:     regexp.MustCompile(`(?i)([a-zA-Z0-9_\.\-]+@(gaea|c5)[\w\.\-]*[:\s].*?[#$%>]|(gaea|c5)[\w\.\-]*[:\s].*?[#$%>]|\[[a-zA-Z0-9_\.\-]+@(gaea|c5)[\w\.\-]*.*?\][$#>]|:~[>#])`),
 	},
 	"gaea-c6": {
 		SSHHost:         "Gaeac6",
@@ -71,7 +72,7 @@ var Clusters = map[string]ClusterInfo{
 		AliasCandidates: []string{"Gaeac6", "gaea-c6", "gaeac6", "c6"},
 		Description:     "NOAA RDHPCS Gaea C6 (gaea61~66, /gpfs/f6)",
 		TimeoutInit:     60,
-		PromptRegex:     regexp.MustCompile(`([a-zA-Z0-9_\.\-]+@gaea\d+:.*?>|gaea\d+:.*?>|\[[a-zA-Z0-9_\.\-]+@gaea\d+.*?\][$#>]|:~>)`),
+		PromptRegex:     regexp.MustCompile(`(?i)([a-zA-Z0-9_\.\-]+@(gaea|c6)[\w\.\-]*[:\s].*?[#$%>]|(gaea|c6)[\w\.\-]*[:\s].*?[#$%>]|\[[a-zA-Z0-9_\.\-]+@(gaea|c6)[\w\.\-]*.*?\][$#>]|:~[>#])`),
 	},
 	"gaea-c7": {
 		SSHHost:         "Gaeac7",
@@ -79,7 +80,7 @@ var Clusters = map[string]ClusterInfo{
 		AliasCandidates: []string{"Gaeac7", "gaea-c7", "gaeac7", "c7"},
 		Description:     "NOAA RDHPCS Gaea C7 (gaea71~76, /gpfs/f7)",
 		TimeoutInit:     90,
-		PromptRegex:     regexp.MustCompile(`([a-zA-Z0-9_\.\-]+@gaea\d+:.*?>|gaea\d+:.*?>|\[[a-zA-Z0-9_\.\-]+@gaea\d+.*?\][$#>]|:~>)`),
+		PromptRegex:     regexp.MustCompile(`(?i)([a-zA-Z0-9_\.\-]+@(gaea|c7)[\w\.\-]*[:\s].*?[#$%>]|(gaea|c7)[\w\.\-]*[:\s].*?[#$%>]|\[[a-zA-Z0-9_\.\-]+@(gaea|c7)[\w\.\-]*.*?\][$#>]|:~[>#])`),
 	},
 	"hera": {
 		SSHHost:         "Hera",
@@ -87,7 +88,7 @@ var Clusters = map[string]ClusterInfo{
 		AliasCandidates: []string{"Hera", "hera"},
 		Description:     "NOAA RDHPCS Hera",
 		TimeoutInit:     50,
-		PromptRegex:     regexp.MustCompile(`([a-zA-Z0-9_\.\-]+@hfe\d+|hfe\d+:[^$#]*[$#]|\[[a-zA-Z0-9_\.\-]+@hfe\d+.*?\][$#>]|:~>)`),
+		PromptRegex:     regexp.MustCompile(`(?i)([a-zA-Z0-9_\.\-]+@(hera|hfe)[\w\.\-]*[:\s].*?[#$%>]|(hera|hfe)[\w\.\-]*[:\s].*?[#$%>]|\[[a-zA-Z0-9_\.\-]+@(hera|hfe)[\w\.\-]*.*?\][$#>]|:~[>#])`),
 	},
 	"ursa": {
 		SSHHost:         "Ursa",
@@ -95,7 +96,7 @@ var Clusters = map[string]ClusterInfo{
 		AliasCandidates: []string{"Ursa", "ursa"},
 		Description:     "NOAA RDHPCS Ursa",
 		TimeoutInit:     50,
-		PromptRegex:     regexp.MustCompile(`([a-zA-Z0-9_\.\-]+@ufe\d+|ufe\d+:[^$#]*[$#]|\[[a-zA-Z0-9_\.\-]+@ufe\d+.*?\][$#>]|:~>)`),
+		PromptRegex:     regexp.MustCompile(`(?i)([a-zA-Z0-9_\.\-]+@(ursa|ufe)[\w\.\-]*[:\s].*?[#$%>]|(ursa|ufe)[\w\.\-]*[:\s].*?[#$%>]|\[[a-zA-Z0-9_\.\-]+@(ursa|ufe)[\w\.\-]*.*?\][$#>]|:~[>#])`),
 	},
 	"orion": {
 		SSHHost:         "Orion",
@@ -103,7 +104,7 @@ var Clusters = map[string]ClusterInfo{
 		AliasCandidates: []string{"Orion", "orion"},
 		Description:     "MSU Orion",
 		TimeoutInit:     35,
-		PromptRegex:     regexp.MustCompile(`([a-zA-Z0-9_\.\-]+@Orion|orion-login|\[[a-zA-Z0-9_\.\-]+@Orion.*?\][$#>]|:~>)`),
+		PromptRegex:     regexp.MustCompile(`(?i)([a-zA-Z0-9_\.\-]+@orion[\w\.\-]*[:\s].*?[#$%>]|orion[\w\.\-]*[:\s].*?[#$%>]|\[[a-zA-Z0-9_\.\-]+@orion[\w\.\-]*.*?\][$#>]|:~[>#])`),
 	},
 	"hercules": {
 		SSHHost:         "Hercules",
@@ -111,7 +112,7 @@ var Clusters = map[string]ClusterInfo{
 		AliasCandidates: []string{"Hercules", "hercules"},
 		Description:     "MSU Hercules",
 		TimeoutInit:     35,
-		PromptRegex:     regexp.MustCompile(`([a-zA-Z0-9_\.\-]+@hercules|hercules-login|\[[a-zA-Z0-9_\.\-]+@hercules.*?\][$#>]|:~>)`),
+		PromptRegex:     regexp.MustCompile(`(?i)([a-zA-Z0-9_\.\-]+@hercules[\w\.\-]*[:\s].*?[#$%>]|hercules[\w\.\-]*[:\s].*?[#$%>]|\[[a-zA-Z0-9_\.\-]+@hercules[\w\.\-]*.*?\][$#>]|:~[>#])`),
 	},
 }
 
@@ -132,8 +133,42 @@ var ClusterAliases = map[string]string{
 	"hercules": "hercules",
 }
 
-// GenericPromptRegex serves as a universal shell prompt detection pattern.
-var GenericPromptRegex = regexp.MustCompile(`([a-zA-Z0-9_\.\-]+@[a-zA-Z0-9_\.\-]+[:\s][^$#>]*[$#>]\s*$|:~[>#]\s*$|\[[a-zA-Z0-9_\.\-]+@.+?\]\s*[$#>]\s*$)`)
+// GenericPromptRegex serves as a universal shell prompt detection pattern across Linux/UNIX environments.
+var GenericPromptRegex = regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@[^\]\n\r]+\]\s*[$#>%\s]*$|[a-zA-Z0-9_\.\-]+@[a-zA-Z0-9_\.\-]+[:\s][^$#>\n\r]*[$#>%\s]*$|:~[>#]\s*$)`)
+
+// TailPromptRegex scans the trailing non-empty line of a shell session for typical interactive prompts.
+var TailPromptRegex = regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@[^\]\n\r]+\]\s*[$#>%\s]*$|[a-zA-Z0-9_\.\-]+@[a-zA-Z0-9_\.\-]+[:\s].*?[$#>%\s]*$|:~[>#]|\b(gaea|c5|c6|c7|hfe|ufe|orion|hercules)[\w\.\-]*[:\s].*?[$#>%\s]*$)`)
+
+// IsPromptDetected checks raw and cleaned buffers for cluster-specific, generic, and tail-line shell prompts.
+func IsPromptDetected(buf, cleaned []byte, clusterRegex *regexp.Regexp) bool {
+	if clusterRegex != nil {
+		if clusterRegex.Match(buf) || clusterRegex.Match(cleaned) {
+			return true
+		}
+	}
+	if GenericPromptRegex.Match(buf) || GenericPromptRegex.Match(cleaned) {
+		return true
+	}
+
+	cleanStr := strings.TrimRight(string(cleaned), " \t\r\n")
+	if len(cleanStr) > 512 {
+		cleanStr = cleanStr[len(cleanStr)-512:]
+	}
+
+	lines := strings.Split(cleanStr, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		if TailPromptRegex.MatchString(line) {
+			return true
+		}
+		break
+	}
+
+	return false
+}
 
 // Request represents a structured JSON-RPC request to the HPC daemon.
 type Request struct {
