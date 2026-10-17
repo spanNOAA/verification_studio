@@ -178,16 +178,9 @@ func (c *Client) ExportStyledChart(ctx context.Context, outPath string, colorMap
 		});
 
 		if (gd.layout) {
-			// Remove redundant top disclaimer title and annotations to maximize plotting area
+			// Clear chart title to maximize vertical plotting area
 			gd.layout.title = { text: '' };
 			if (gd.layout.titlefont) gd.layout.titlefont = { size: 0 };
-			if (Array.isArray(gd.layout.annotations)) {
-				gd.layout.annotations = gd.layout.annotations.filter(ann => {
-					if (!ann || !ann.text) return true;
-					const t = String(ann.text).toLowerCase();
-					return !t.includes("research purpose");
-				});
-			}
 
 			// Compact top margin to grant extra vertical space for the curves
 			if (!gd.layout.margin) gd.layout.margin = {};
