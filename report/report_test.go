@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"verification_studio/internal/hpc"
-	"verification_studio/internal/mats"
+	"verification_studio/hpc"
+	"verification_studio/mats"
 )
 
 func TestBuildReports(t *testing.T) {

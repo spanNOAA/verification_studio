@@ -13,7 +13,7 @@ import (
 	"sync"
 
 	"github.com/webview/webview_go"
-	"verification_studio/internal/pipeline"
+	"verification_studio/pipeline"
 )
 
 //go:embed ui.html

@@ -1,8 +1,8 @@
 package report
 
 import (
-	"verification_studio/internal/hpc"
-	"verification_studio/internal/mats"
+	"verification_studio/hpc"
+	"verification_studio/mats"
 )
 
 // DatesConfig specifies the verification time window for surface and upper-air.

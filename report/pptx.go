@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	goppt "github.com/casibase/goppt"
-	"verification_studio/internal/mats"
+	"verification_studio/mats"
 )
 
 // BuildPresentation compiles the PowerPoint presentation (.pptx) deck in pure Go.

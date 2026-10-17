@@ -12,8 +12,8 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
-	"verification_studio/internal/browser"
-	"verification_studio/internal/hpc"
+	"verification_studio/browser"
+	"verification_studio/hpc"
 )
 
 // Client fetches observation maps from NOAA NSSL MRMS Product Viewer.

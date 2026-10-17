@@ -11,14 +11,11 @@ echo "=================================================================="
 BUILD_DIR="$DIR/build"
 mkdir -p "$BUILD_DIR"
 
-cd "$DIR/gui"
 echo "[1/4] Compiling macOS arm64 binary..."
-CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o "$BUILD_DIR/verification_studio_arm64" .
+CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o "$BUILD_DIR/verification_studio_arm64" ./gui
 
 echo "[2/4] Compiling macOS amd64 (x86_64) binary..."
-CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o "$BUILD_DIR/verification_studio_amd64" .
-
-cd "$DIR"
+CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o "$BUILD_DIR/verification_studio_amd64" ./gui
 echo "[3/4] Creating Universal Mach-O binary via lipo..."
 lipo -create -output "$BUILD_DIR/verification_studio" "$BUILD_DIR/verification_studio_arm64" "$BUILD_DIR/verification_studio_amd64"
 rm -f "$BUILD_DIR/verification_studio_arm64" "$BUILD_DIR/verification_studio_amd64"

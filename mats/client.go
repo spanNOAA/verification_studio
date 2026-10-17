@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"verification_studio/internal/browser"
+	"verification_studio/browser"
 )
 
 // Client handles automated interaction with NOAA GSL MATS web applications.

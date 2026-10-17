@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"verification_studio/internal/hpc"
+	"verification_studio/hpc"
 )
 
 func printUsage() {

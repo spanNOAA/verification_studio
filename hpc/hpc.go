@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"verification_studio/internal/mats"
+	"verification_studio/mats"
 )
 
 // ValidClusters lists all recognized NOAA & partner HPC clusters.

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"verification_studio/internal/browser"
-	"verification_studio/internal/hpc"
-	"verification_studio/internal/mats"
-	"verification_studio/internal/mrms"
-	"verification_studio/internal/report"
+	"verification_studio/browser"
+	"verification_studio/hpc"
+	"verification_studio/mats"
+	"verification_studio/mrms"
+	"verification_studio/report"
 )
 
 // Request defines the options for a verification execution run.
