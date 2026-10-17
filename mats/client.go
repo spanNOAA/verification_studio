@@ -169,12 +169,8 @@ func (c *Client) ExportStyledChart(ctx context.Context, outPath string, colorMap
 				trace.error_x.thickness = 2.5;
 			}
 
-			if (isBias && hasMainMetric) {
-				trace.showlegend = false;
-			} else {
-				trace.name = shortName;
-				trace.showlegend = true;
-			}
+			trace.name = shortName;
+			trace.showlegend = false;
 		});
 
 		if (gd.layout) {
@@ -182,12 +178,18 @@ func (c *Client) ExportStyledChart(ctx context.Context, outPath string, colorMap
 			gd.layout.title = { text: '' };
 			if (gd.layout.titlefont) gd.layout.titlefont = { size: 0 };
 
+			// Hide internal legend box to eliminate overlap (slide sidebar provides full legend)
+			gd.layout.showlegend = false;
+			if (gd.layout.legend) {
+				delete gd.layout.legend;
+			}
+
 			// Compact top margin to grant extra vertical space for the curves
 			if (!gd.layout.margin) gd.layout.margin = {};
 			gd.layout.margin.t = 25;
 
-			// Enlarge axes titles & tick fonts with automargin (v1 & v2 compatible)
-			['xaxis', 'yaxis', 'xaxis2', 'yaxis2'].forEach(ax => {
+			// Enlarge all axes titles & tick fonts across all subplots, subdomains, and secondary axes
+			Object.keys(gd.layout).filter(k => /^[xy]axis\d*$/.test(k)).forEach(ax => {
 				if (gd.layout[ax]) {
 					gd.layout[ax].automargin = true;
 					if (gd.layout[ax].title) {
@@ -208,13 +210,6 @@ func (c *Client) ExportStyledChart(ctx context.Context, outPath string, colorMap
 					}
 				}
 			});
-
-			if (gd.layout.legend) {
-				gd.layout.legend.font = { size: 26, color: '#0f172a' };
-				gd.layout.legend.bgcolor = 'rgba(255, 255, 255, 0.90)';
-				gd.layout.legend.bordercolor = 'rgba(203, 213, 225, 0.9)';
-				gd.layout.legend.borderwidth = 2;
-			}
 		}
 
 		Plotly.redraw(gd);
