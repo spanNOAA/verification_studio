@@ -270,6 +270,10 @@ func BuildHTMLReport(cfg Config, matsDir, outputHTML string, slidesData []SlideD
 			}
 
 			if imgRH != "" {
+				rhLabel := "Relative Humidity (RHobT)"
+				if strings.Contains(slide.Title, "AMDAR") {
+					rhLabel = "Relative Humidity (RH)"
+				}
 				slideContent = fmt.Sprintf(`
 				<div class="slide-header"><h2>%s</h2></div>
 				<div class="grid-profile">
@@ -282,7 +286,7 @@ func BuildHTMLReport(cfg Config, matsDir, outputHTML string, slidesData []SlideD
 				    %s
 				  </div>
 				  <div class="profile-box p-rh">
-				    <div class="profile-label">Relative Humidity (RHobT)</div>
+				    <div class="profile-label">%s</div>
 				    %s
 				  </div>
 				  <div class="profile-box legend-box">
@@ -293,7 +297,7 @@ func BuildHTMLReport(cfg Config, matsDir, outputHTML string, slidesData []SlideD
 				    <div class="legend-row">%s<span>Dash: BIAS</span></div>
 				  </div>
 				</div>
-				`, safeTitle, tBox, wBox, rhBox, strings.Join(expLines, ""), svgSolid, svgDash)
+				`, safeTitle, tBox, wBox, rhLabel, rhBox, strings.Join(expLines, ""), svgSolid, svgDash)
 			} else {
 				slideContent = fmt.Sprintf(`
 				<div class="slide-header"><h2>%s</h2></div>

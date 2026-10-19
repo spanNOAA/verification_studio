@@ -387,22 +387,22 @@ func (c *Client) FetchUpperAirAMDAR(
 	amdarDieoffVars := []UADieoffVar{
 		{MATSLabel: "Temperature", Tag: "temp"},
 		{MATSLabel: "Wind", Tag: "wind"},
-		{MATSLabel: "RHobT", Tag: "rh"},
+		{MATSLabel: "RH", Tag: "rh"},
 	}
 
 	amdarProfConfigs := []UAProfileConfig{
 		{Fhr: "1", VarLabel: "Temperature", VarTag: "temp"},
 		{Fhr: "1", VarLabel: "Wind", VarTag: "wind"},
-		{Fhr: "1", VarLabel: "RHobT", VarTag: "rh"},
+		{Fhr: "1", VarLabel: "RH", VarTag: "rh"},
 		{Fhr: "3", VarLabel: "Temperature", VarTag: "temp"},
 		{Fhr: "3", VarLabel: "Wind", VarTag: "wind"},
-		{Fhr: "3", VarLabel: "RHobT", VarTag: "rh"},
+		{Fhr: "3", VarLabel: "RH", VarTag: "rh"},
 		{Fhr: "6", VarLabel: "Temperature", VarTag: "temp"},
 		{Fhr: "6", VarLabel: "Wind", VarTag: "wind"},
-		{Fhr: "6", VarLabel: "RHobT", VarTag: "rh"},
+		{Fhr: "6", VarLabel: "RH", VarTag: "rh"},
 		{Fhr: "12", VarLabel: "Temperature", VarTag: "temp"},
 		{Fhr: "12", VarLabel: "Wind", VarTag: "wind"},
-		{Fhr: "12", VarLabel: "RHobT", VarTag: "rh"},
+		{Fhr: "12", VarLabel: "RH", VarTag: "rh"},
 	}
 
 	totalSteps := len(amdarDieoffVars) + len(amdarProfConfigs)

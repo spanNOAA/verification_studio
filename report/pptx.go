@@ -364,7 +364,11 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 				p = lbl3.CreateParagraph()
 			}
 			p.GetAlignment().SetHorizontal(goppt.HorizontalCenter)
-			tr := p.CreateTextRun("Relative Humidity (RHobT)")
+			rhLabel := "Relative Humidity (RHobT)"
+			if strings.Contains(title, "AMDAR") {
+				rhLabel = "Relative Humidity (RH)"
+			}
+			tr := p.CreateTextRun(rhLabel)
 			tr.GetFont().SetSize(14).SetBold(true)
 
 			img := slide.CreateDrawingShape()
@@ -538,7 +542,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 			add3PanelSlide(
 				"Upper air against AMDAR dieoff",
 				"amdar_dieoff_temp.png", "amdar_dieoff_rh.png", "amdar_dieoff_wind.png",
-				"Temperature", "RHobT", "Wind",
+				"Temperature", "RH", "Wind",
 				false, "COMBINED", reg,
 			)
 		}

@@ -12,7 +12,7 @@ import (
 
 func printUsage() {
 	fmt.Print(`==================================================================
- NOAA GSL Verification Studio v2.0.0-beta2 (Pure Go Universal Edition)
+ NOAA GSL Verification Studio v2.0.0-beta3 (Pure Go Universal Edition)
 ==================================================================
 A native, lightweight numerical weather prediction model verification
 and presentation generator suite.
@@ -60,7 +60,7 @@ func runCLI(args []string) bool {
 	}
 
 	if firstArg == "--version" || firstArg == "-v" || firstArg == "version" {
-		fmt.Println("NOAA GSL Verification Studio v2.0.0-beta2 (Pure Go Universal Edition)")
+		fmt.Println("NOAA GSL Verification Studio v2.0.0-beta3 (Pure Go Universal Edition)")
 		os.Exit(0)
 	}
 

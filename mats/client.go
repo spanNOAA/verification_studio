@@ -85,7 +85,7 @@ func (c *Client) OpenMATSPage(ctx context.Context, pageURL string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("%w: page navigation or control loading canceled: %v", ErrRateLimited, ctx.Err())
 		default:
 		}
 
@@ -112,16 +112,15 @@ func isRateLimited(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, ErrRateLimited) || errors.Is(err, context.DeadlineExceeded) {
+	if errors.Is(err, ErrRateLimited) {
 		return true
 	}
 	s := strings.ToLower(err.Error())
 	return strings.Contains(s, "rate limited") ||
 		strings.Contains(s, "cloudflare") ||
 		strings.Contains(s, "429") ||
-		strings.Contains(s, "deadline exceeded") ||
-		strings.Contains(s, "timed out") ||
-		strings.Contains(s, "timeout") ||
+		strings.Contains(s, "503") ||
+		strings.Contains(s, "504") ||
 		strings.Contains(s, "connection reset") ||
 		strings.Contains(s, "connection refused") ||
 		strings.Contains(s, "err_timed_out") ||
