@@ -31,6 +31,10 @@ jobs:
       - name: Compile Universal Mach-O Binary
         run: |
           mkdir -p build
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+          export CGO_CFLAGS="-mmacosx-version-min=11.0"
+          export CGO_LDFLAGS="-mmacosx-version-min=11.0"
+
           echo "Compiling darwin/arm64..."
           CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o build/vs_arm64 ./gui
 
