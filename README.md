@@ -8,6 +8,22 @@
 
 An end-to-end automated verification and presentation generation suite engineered for numerical weather prediction models (e.g. RRFS, HRRR). By specifying experiment model identifiers and verification date ranges, Verification Studio **automatically evaluates NOAA GSL MATS statistical curves, retrieves remote HPC radar reflectivity graphics**, and **generates professional 26-slide PowerPoint presentations (.pptx) and 1:1 synchronized interactive web presentations (.html) with a single click**.
 
+> [!IMPORTANT]
+> **macOS First-Time Launch Notice (Gatekeeper Workaround)**
+> Verification Studio is an open-source scientific tool built in pure Go and is distributed without an Apple commercial Developer ID ($99/year). If macOS displays *"Apple could not verify this app is free of malware..."* or blocks the initial launch:
+>
+> - **Option 1 (System Settings - Recommended for macOS 15 Sequoia / Sonoma)**:
+>   1. Attempt to launch `Verification Studio.app` once so macOS registers the attempt.
+>   2. Open **System Settings** -> **Privacy & Security**.
+>   3. Scroll down to the **Security** section and click **"Open Anyway"** (or **"Allow Anyway"**).
+>   4. Authenticate with your Mac password or Touch ID. *(Required only on the very first launch)*.
+>
+> - **Option 2 (Terminal - Instant One-liner)**:
+>   Run the following command in Terminal to clear the download quarantine attribute:
+>   ```bash
+>   xattr -cr "/Applications/Verification Studio.app"
+>   ```
+
 ---
 
 ## 1. Modern Architecture (Pure Go Universal Engine)
@@ -74,6 +90,7 @@ Verification Studio v2.0 has been re-architected from the ground up into a **100
    - On macOS, open the DMG and drag **`Verification Studio.app`** to your `/Applications` folder.
 2. **Launch Application**:
    - Double-click **Verification Studio** from Launchpad, Finder, or `/Applications`.
+   - *Note for macOS users*: If Gatekeeper displays an unverified app warning on first launch, approve it via **System Settings -> Privacy & Security -> Open Anyway** (see notice above).
 3. **Configure Settings**:
    - **Report Title**: e.g., `RRFSv2 Model Verification & Performance Evaluation`
    - **Output Directory**: Click `Browse...` to pick a destination folder on your Desktop or workspace.
