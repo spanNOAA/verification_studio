@@ -170,6 +170,7 @@ func extractUserFromSSHConfig(path string, cluster string) string {
 // InferUserFromModelPath attempts to infer a supercomputer username from scratch/gpfs path components.
 func InferUserFromModelPath(path string) string {
 	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`/gpfs/f\d+/[^/]+/scratch/([^/]+)/`),
 		regexp.MustCompile(`/gpfs/f\d+/([^/]+)/`),
 		regexp.MustCompile(`/scratch\d*/RDARCH/([^/]+)/`),
 		regexp.MustCompile(`/scratch\d*/([^/]+)/`),
@@ -179,7 +180,8 @@ func InferUserFromModelPath(path string) string {
 	for _, re := range patterns {
 		if m := re.FindStringSubmatch(path); len(m) > 1 {
 			candidate := strings.TrimSpace(m[1])
-			if candidate != "" && candidate != "com" && candidate != "rrfs" && candidate != "ptmp" {
+			if candidate != "" && candidate != "com" && candidate != "rrfs" && candidate != "ptmp" &&
+				candidate != "wrfruc" && candidate != "scratch" && candidate != "noaa" && candidate != "rtrr" {
 				return candidate
 			}
 		}

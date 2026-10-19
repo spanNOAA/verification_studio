@@ -28,11 +28,20 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 		candidateUser = ResolveCandidateUser(clusterKey, "")
 	}
 
-	if candidateUser == "" {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Enter your HPC username for [%s]: ", strings.ToUpper(clusterKey))
+	reader := bufio.NewReader(os.Stdin)
+	if candidateUser != "" {
+		fmt.Printf("HPC username for [%s] (press Enter for '%s', or type a new username): ", strings.ToUpper(clusterKey), candidateUser)
 		input, _ := reader.ReadString('\n')
-		candidateUser = strings.TrimSpace(input)
+		trimmed := strings.TrimSpace(input)
+		if trimmed != "" {
+			candidateUser = trimmed
+		}
+	} else {
+		for candidateUser == "" {
+			fmt.Printf("Enter your HPC username for [%s]: ", strings.ToUpper(clusterKey))
+			input, _ := reader.ReadString('\n')
+			candidateUser = strings.TrimSpace(input)
+		}
 	}
 	if candidateUser != "" {
 		_ = SaveConfirmedUser(clusterKey, candidateUser)

@@ -12,6 +12,7 @@ func TestInferUserFromModelPath(t *testing.T) {
 		expected string
 	}{
 		{"/gpfs/f6/sijie.pan/rrfs_v2/output", "sijie.pan"},
+		{"/gpfs/f6/wrfruc/scratch/username/retros/exp1", "username"},
 		{"/scratch1/RDARCH/eda.hab/model_runs/test", "eda.hab"},
 		{"/scratch2/BMC/gsd-hpcs/john.doe/run", "BMC"}, // scratch2 match
 		{"/work/noaa/r2d/forecast", "r2d"},
