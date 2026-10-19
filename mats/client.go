@@ -305,18 +305,38 @@ func (c *Client) ExportStyledChart(ctx context.Context, outPath string, colorMap
 		gd.data.forEach((trace) => {
 			if (!trace.name || trace.name === "x = 0" || trace.name === "y = 0") return;
 
-			let matchedModel = null;
-			for (const m of models) {
-				if (trace.name.includes(m.id) || trace.name.includes(m.name)) {
-					matchedModel = m;
-					break;
+			// Extract exact data-source identifier from MATS trace name (e.g. "Curve0: <data-source> at <region>...")
+			let rawSource = trace.name;
+			const colonIdx = rawSource.indexOf(":");
+			if (colonIdx !== -1) {
+				rawSource = rawSource.substring(colonIdx + 1).trim();
+			}
+			const atIdx = rawSource.indexOf(" at ");
+			if (atIdx !== -1) {
+				rawSource = rawSource.substring(0, atIdx).trim();
+			} else {
+				const commaIdx = rawSource.indexOf(",");
+				if (commaIdx !== -1) {
+					rawSource = rawSource.substring(0, commaIdx).trim();
 				}
+			}
+
+			// 1. Strict equality matching first against model ID or custom Name
+			let matchedModel = models.find(m => m.id === rawSource || m.name === rawSource);
+
+			// 2. Token boundary match fallback (word boundary instead of arbitrary substring)
+			if (!matchedModel) {
+				matchedModel = models.find(m => {
+					const escaped = m.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+					const re = new RegExp("(^|[:\\s])" + escaped + "(\\s+at\\s+|[\\s,]|$)");
+					return re.test(trace.name);
+				});
 			}
 
 			let matchedColor = matchedModel ? matchedModel.color : null;
 			if (!matchedColor) {
 				for (const [key, color] of Object.entries(colorMap)) {
-					if (trace.name.includes(key)) {
+					if (key === rawSource) {
 						matchedColor = color;
 						break;
 					}
@@ -325,7 +345,7 @@ func (c *Client) ExportStyledChart(ctx context.Context, outPath string, colorMap
 
 			const isBias = trace.name.toLowerCase().includes("bias");
 			const color = matchedColor || (trace.line && trace.line.color) || "#2563eb";
-			const shortName = matchedModel ? matchedModel.name : trace.name.split(':')[0];
+			const shortName = matchedModel ? matchedModel.name : rawSource;
 
 			if (trace.line) {
 				trace.line.color = color;
