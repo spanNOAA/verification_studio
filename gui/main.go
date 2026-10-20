@@ -20,18 +20,20 @@ import (
 var uiHTML string
 
 type PipelineRequest struct {
-	Title       string          `json:"title"`
-	OutputDir   string          `json:"output_dir"`
-	ModelsText  string          `json:"models_text"`
-	SfcDates    string          `json:"sfc_dates"`
-	UaDates     string          `json:"ua_dates"`
-	ReportName  string          `json:"report_name"`
-	PptxName    string          `json:"pptx_name"`
-	SkipFetch   bool            `json:"skip_fetch"`
-	ForceFetch  bool            `json:"force_fetch"`
-	IncludeCref bool            `json:"include_cref"`
-	RadarCases  json.RawMessage `json:"radar_cases"`
-	Regions     []string        `json:"regions"`
+	Title        string          `json:"title"`
+	OutputDir    string          `json:"output_dir"`
+	ModelsText   string          `json:"models_text"`
+	SfcDates     string          `json:"sfc_dates"`
+	UaDates      string          `json:"ua_dates"`
+	RadarDates   string          `json:"radar_dates"`
+	CeilVisDates string          `json:"ceilvis_dates"`
+	ReportName   string          `json:"report_name"`
+	PptxName     string          `json:"pptx_name"`
+	SkipFetch    bool            `json:"skip_fetch"`
+	ForceFetch   bool            `json:"force_fetch"`
+	IncludeCref  bool            `json:"include_cref"`
+	RadarCases   json.RawMessage `json:"radar_cases"`
+	Regions      []string        `json:"regions"`
 }
 
 var (
@@ -337,17 +339,19 @@ func main() {
 			}
 
 			pipeReq := pipeline.Request{
-				Title:       reportTitle,
-				OutputDir:   validOutDir,
-				ReportName:  baseName,
-				ModelsText:  req.ModelsText,
-				SfcDates:    req.SfcDates,
-				UaDates:     req.UaDates,
-				Regions:     req.Regions,
-				SkipFetch:   req.SkipFetch,
-				ForceFetch:  req.ForceFetch,
-				IncludeCref: req.IncludeCref,
-				RadarCases:  req.RadarCases,
+				Title:        reportTitle,
+				OutputDir:    validOutDir,
+				ReportName:   baseName,
+				ModelsText:   req.ModelsText,
+				SfcDates:     req.SfcDates,
+				UaDates:      req.UaDates,
+				RadarDates:   req.RadarDates,
+				CeilVisDates: req.CeilVisDates,
+				Regions:      req.Regions,
+				SkipFetch:    req.SkipFetch,
+				ForceFetch:   req.ForceFetch,
+				IncludeCref:  req.IncludeCref,
+				RadarCases:   req.RadarCases,
 			}
 
 			pipeErr := pipeline.Run(ctx, pipeReq, sendOutput)

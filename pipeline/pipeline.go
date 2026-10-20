@@ -20,17 +20,19 @@ import (
 
 // Request defines the options for a verification execution run.
 type Request struct {
-	Title       string          `json:"title"`
-	OutputDir   string          `json:"output_dir"`
-	ReportName  string          `json:"report_name"`
-	ModelsText  string          `json:"models_text"`
-	SfcDates    string          `json:"sfc_dates"`
-	UaDates     string          `json:"ua_dates"`
-	Regions     []string        `json:"regions"`
-	SkipFetch   bool            `json:"skip_fetch"`
-	ForceFetch  bool            `json:"force_fetch"`
-	IncludeCref bool            `json:"include_cref"`
-	RadarCases  json.RawMessage `json:"radar_cases"`
+	Title        string          `json:"title"`
+	OutputDir    string          `json:"output_dir"`
+	ReportName   string          `json:"report_name"`
+	ModelsText   string          `json:"models_text"`
+	SfcDates     string          `json:"sfc_dates"`
+	UaDates      string          `json:"ua_dates"`
+	RadarDates   string          `json:"radar_dates"`
+	CeilVisDates string          `json:"ceilvis_dates"`
+	Regions      []string        `json:"regions"`
+	SkipFetch    bool            `json:"skip_fetch"`
+	ForceFetch   bool            `json:"force_fetch"`
+	IncludeCref  bool            `json:"include_cref"`
+	RadarCases   json.RawMessage `json:"radar_cases"`
 }
 
 // ExtractShortName derives a concise, readable experiment name from a MATS model ID.
@@ -211,12 +213,21 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		fmt.Print(msg)
 	}
 
+	radarDates := strings.TrimSpace(req.RadarDates)
+	if radarDates == "" {
+		radarDates = req.SfcDates
+	}
+	ceilvisDates := strings.TrimSpace(req.CeilVisDates)
+	if ceilvisDates == "" {
+		ceilvisDates = req.SfcDates
+	}
+
 	log("\n==================================================================\n")
 	log(" Initializing Verification Pipeline...\n")
 	log(" Title   : %s\n", req.Title)
 	log(" Output  : %s\n", req.OutputDir)
 	log(" Report  : %s (.pptx / .html)\n", req.ReportName)
-	log(" Periods : Surface [%s] | Upper-Air [%s]\n", req.SfcDates, req.UaDates)
+	log(" Periods : Surface [%s] | Upper-Air [%s] | Radar [%s] | Ceil/Vis [%s]\n", req.SfcDates, req.UaDates, radarDates, ceilvisDates)
 	log("==================================================================\n\n")
 
 	models := ParseModels(req.ModelsText)
@@ -314,9 +325,36 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			}
 		}
 
-		// Stage 1: Surface Dieoff
+		// Stage 1 & 2 (Optional, early): Remote HPC Radar Images & MRMS Observations
+		// Running HPC retrieval first guarantees user can provide PIN/YubiKey MFA immediately at pipeline launch
+		if hasRadarCases {
+			stageIdx++
+			log(">>> [%d/%d] Retrieving Synoptic Radar Forecast Images from HPC Clusters...\n", stageIdx, totalStages)
+			reportProgress(stageIdx, 0, "HPC Radar Retrieval")
+			err = hpc.DownloadRadarImages(models, crefDir, radarCases, req.ForceFetch, func(pct int, msg string) {
+				reportProgress(stageIdx, pct, msg)
+			}, func(s string) { log("%s", s) })
+			if err != nil {
+				log("  [HPC RADAR ERROR] %v\n", err)
+			}
+
+			isolateBrowser("MRMS Observations")
+			stageIdx++
+			log("\n>>> [%d/%d] Retrieving Observed MRMS Maps from NOAA NSSL Product Viewer...\n", stageIdx, totalStages)
+			reportProgress(stageIdx, 0, "MRMS Observations")
+
+			err = mrmsClient.FetchRadarImages(radarCases, crefDir, req.ForceFetch, func(pct int, msg string) {
+				reportProgress(stageIdx, pct, msg)
+			})
+			if err != nil {
+				log("  [MRMS RADAR ERROR] %v\n", err)
+			}
+		}
+
+		// Surface Dieoff
+		isolateBrowser("Surface Dieoff")
 		stageIdx++
-		log(">>> [%d/%d] Fetching Surface Dieoff Verification...\n", stageIdx, totalStages)
+		log("\n>>> [%d/%d] Fetching Surface Dieoff Verification...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Surface Dieoff")
 		err = matsClient.FetchSurfaceDieoff(ctx, models, req.SfcDates, colorMap, matsDir, regions, req.ForceFetch, func(curr, total int, msg string) {
 			pct := int(float64(curr) / float64(total) * 100.0)
@@ -326,7 +364,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			log("  [SURFACE ERROR] %v\n", err)
 		}
 
-		// Stage 2: Surface Time Series
+		// Surface Time Series
 		isolateBrowser("Surface Time Series")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Surface Time Series (1h, 3h, 12h, 24h)...\n", stageIdx, totalStages)
@@ -339,7 +377,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			log("  [SURFACE TS ERROR] %v\n", err)
 		}
 
-		// Stage 3: Upper Air Dieoff against RAOBs
+		// Upper Air Dieoff against RAOBs
 		isolateBrowser("Upper Air Dieoff")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Upper Air Dieoff against RAOBs...\n", stageIdx, totalStages)
@@ -352,7 +390,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			log("  [UPPER AIR ERROR] %v\n", err)
 		}
 
-		// Stage 4: Upper Air Profiles
+		// Upper Air Profiles
 		isolateBrowser("Upper Air Profiles")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Upper Air Profiles (1h, 3h, 6h, 12h)...\n", stageIdx, totalStages)
@@ -365,7 +403,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			log("  [UPPER AIR PROFILE ERROR] %v\n", err)
 		}
 
-		// Stage 5: Upper Air AMDAR
+		// Upper Air AMDAR
 		isolateBrowser("Upper Air AMDAR")
 		stageIdx++
 		log("\n>>> [%d/%d] Checking Upper Air AMDAR Verification...\n", stageIdx, totalStages)
@@ -378,12 +416,12 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			log("  [AMDAR ERROR] %v\n", err)
 		}
 
-		// Stage 6: Composite Reflectivity
+		// Radar Composite Reflectivity
 		isolateBrowser("Radar Reflectivity")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Radar Composite Reflectivity (15, 25, 35 dBZ)...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Radar Reflectivity")
-		err = matsClient.FetchReflectivity(ctx, models, req.SfcDates, colorMap, matsDir, regions, req.ForceFetch, func(curr, total int, msg string) {
+		err = matsClient.FetchReflectivity(ctx, models, radarDates, colorMap, matsDir, regions, req.ForceFetch, func(curr, total int, msg string) {
 			pct := int(float64(curr) / float64(total) * 100.0)
 			reportProgress(stageIdx, pct, msg)
 		})
@@ -391,12 +429,12 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			log("  [RADAR ERROR] %v\n", err)
 		}
 
-		// Stage 7: Cloud Ceiling
+		// Cloud Ceiling
 		isolateBrowser("Cloud Ceiling")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Cloud Ceiling Verification (500ft, 1000ft, 3000ft)...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Cloud Ceiling")
-		err = matsClient.FetchCeiling(ctx, models, req.SfcDates, colorMap, matsDir, regions, req.ForceFetch, func(curr, total int, msg string) {
+		err = matsClient.FetchCeiling(ctx, models, ceilvisDates, colorMap, matsDir, regions, req.ForceFetch, func(curr, total int, msg string) {
 			pct := int(float64(curr) / float64(total) * 100.0)
 			reportProgress(stageIdx, pct, msg)
 		})
@@ -404,43 +442,17 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			log("  [CEILING ERROR] %v\n", err)
 		}
 
-		// Stage 8: Visibility
+		// Visibility
 		isolateBrowser("Visibility")
 		stageIdx++
 		log("\n>>> [%d/%d] Fetching Surface Visibility Verification (1mi, 3mi, 5mi)...\n", stageIdx, totalStages)
 		reportProgress(stageIdx, 0, "Visibility")
-		err = matsClient.FetchVisibility(ctx, models, req.SfcDates, colorMap, matsDir, regions, req.ForceFetch, func(curr, total int, msg string) {
+		err = matsClient.FetchVisibility(ctx, models, ceilvisDates, colorMap, matsDir, regions, req.ForceFetch, func(curr, total int, msg string) {
 			pct := int(float64(curr) / float64(total) * 100.0)
 			reportProgress(stageIdx, pct, msg)
 		})
 		if err != nil {
 			log("  [VISIBILITY ERROR] %v\n", err)
-		}
-
-		// Stage 9: Remote HPC Radar Images (if cases)
-		if hasRadarCases {
-			stageIdx++
-			log("\n>>> [%d/%d] Retrieving Synoptic Radar Forecast Images from HPC Clusters...\n", stageIdx, totalStages)
-			reportProgress(stageIdx, 0, "HPC Radar Retrieval")
-			err = hpc.DownloadRadarImages(models, crefDir, radarCases, req.ForceFetch, func(pct int, msg string) {
-				reportProgress(stageIdx, pct, msg)
-			}, func(s string) { log("%s", s) })
-			if err != nil {
-				log("  [HPC RADAR ERROR] %v\n", err)
-			}
-
-			// Stage 10: MRMS Observation Images
-			isolateBrowser("MRMS Observations")
-			stageIdx++
-			log("\n>>> [%d/%d] Retrieving Observed MRMS Maps from NOAA NSSL Product Viewer...\n", stageIdx, totalStages)
-			reportProgress(stageIdx, 0, "MRMS Observations")
-
-			err = mrmsClient.FetchRadarImages(radarCases, crefDir, req.ForceFetch, func(pct int, msg string) {
-				reportProgress(stageIdx, pct, msg)
-			})
-			if err != nil {
-				log("  [MRMS RADAR ERROR] %v\n", err)
-			}
 		}
 	} else {
 		log(">>> [--skip-fetch] Skipping online data downloads; reusing cached local plots.\n")
@@ -459,6 +471,8 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		Dates: report.DatesConfig{
 			Surface:  req.SfcDates,
 			UpperAir: req.UaDates,
+			Radar:    radarDates,
+			CeilVis:  ceilvisDates,
 		},
 		Models:     models,
 		Regions:    regions,

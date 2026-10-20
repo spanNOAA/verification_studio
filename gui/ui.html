@@ -779,6 +779,46 @@
               </div>
             </div>
           </div>
+          <div class="row" style="margin-top: 10px;">
+            <div class="col" style="min-width: 320px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label class="form-label" style="margin-bottom:0;">Radar Reflectivity Period:</label>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="syncRadarDates()" title="Copy start and end dates from Surface">📋 Sync from Surface</button>
+              </div>
+              <div class="date-range-row" style="margin-top: 4px;">
+                <div class="dt-field-group" onclick="openDateTimePicker('radarStart', this)">
+                  <span class="dt-badge">From</span>
+                  <input type="text" id="radarStart" class="dt-input" value="05/06/2024 10:00" readonly>
+                  <span class="dt-calendar-btn">📅</span>
+                </div>
+                <span class="date-separator">→</span>
+                <div class="dt-field-group" onclick="openDateTimePicker('radarEnd', this)">
+                  <span class="dt-badge">To</span>
+                  <input type="text" id="radarEnd" class="dt-input" value="05/13/2024 00:00" readonly>
+                  <span class="dt-calendar-btn">📅</span>
+                </div>
+              </div>
+            </div>
+            <div class="col" style="min-width: 320px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label class="form-label" style="margin-bottom:0;">Ceiling & Visibility Period:</label>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="syncCeilVisDates()" title="Copy start and end dates from Surface">📋 Sync from Surface</button>
+              </div>
+              <div class="date-range-row" style="margin-top: 4px;">
+                <div class="dt-field-group" onclick="openDateTimePicker('ceilvisStart', this)">
+                  <span class="dt-badge">From</span>
+                  <input type="text" id="ceilvisStart" class="dt-input" value="05/06/2024 10:00" readonly>
+                  <span class="dt-calendar-btn">📅</span>
+                </div>
+                <span class="date-separator">→</span>
+                <div class="dt-field-group" onclick="openDateTimePicker('ceilvisEnd', this)">
+                  <span class="dt-badge">To</span>
+                  <input type="text" id="ceilvisEnd" class="dt-input" value="05/13/2024 00:00" readonly>
+                  <span class="dt-calendar-btn">📅</span>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="row" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
             <div class="col">
               <label class="form-label" style="margin-bottom: 6px;">Evaluation Regions:</label>
@@ -1398,6 +1438,16 @@
       document.getElementById('uaEnd').value = document.getElementById('sfcEnd').value;
     }
 
+    function syncRadarDates() {
+      document.getElementById('radarStart').value = document.getElementById('sfcStart').value;
+      document.getElementById('radarEnd').value = document.getElementById('sfcEnd').value;
+    }
+
+    function syncCeilVisDates() {
+      document.getElementById('ceilvisStart').value = document.getElementById('sfcStart').value;
+      document.getElementById('ceilvisEnd').value = document.getElementById('sfcEnd').value;
+    }
+
     // ==========================================
     // Composite Reflectivity Dynamic Case Logic
     // ==========================================
@@ -1680,9 +1730,15 @@
       const sfcEnd = document.getElementById('sfcEnd').value.trim();
       const uaStart = document.getElementById('uaStart').value.trim();
       const uaEnd = document.getElementById('uaEnd').value.trim();
+      const radarStart = document.getElementById('radarStart').value.trim();
+      const radarEnd = document.getElementById('radarEnd').value.trim();
+      const ceilvisStart = document.getElementById('ceilvisStart').value.trim();
+      const ceilvisEnd = document.getElementById('ceilvisEnd').value.trim();
 
       const sfcDates = `${sfcStart} - ${sfcEnd}`;
       const uaDates = `${uaStart} - ${uaEnd}`;
+      const radarDates = `${radarStart} - ${radarEnd}`;
+      const ceilvisDates = `${ceilvisStart} - ${ceilvisEnd}`;
       const baseName = getCleanReportBaseName();
       const skipFetch = document.getElementById('skipFetch').checked;
       const forceFetch = document.getElementById('forceFetch').checked;
@@ -1696,6 +1752,8 @@
       if (!modelsText) { alert('Please provide at least one Experiment!'); return; }
       if (!sfcStart || !sfcEnd) { alert('Please select a valid Surface Verification Period (From & To)!'); return; }
       if (!uaStart || !uaEnd) { alert('Please select a valid Upper Air Verification Period (From & To)!'); return; }
+      if (!radarStart || !radarEnd) { alert('Please select a valid Radar Verification Period (From & To)!'); return; }
+      if (!ceilvisStart || !ceilvisEnd) { alert('Please select a valid Ceiling & Visibility Period (From & To)!'); return; }
 
       const btn = document.getElementById('btnStart');
       btn.disabled = true;
@@ -1713,6 +1771,7 @@
       const payload = JSON.stringify({
         title, output_dir: outputDir, models_text: modelsText,
         sfc_dates: sfcDates, ua_dates: uaDates,
+        radar_dates: radarDates, ceilvis_dates: ceilvisDates,
         report_name: baseName, pptx_name: baseName,
         skip_fetch: skipFetch,
         force_fetch: forceFetch,

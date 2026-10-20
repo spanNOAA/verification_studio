@@ -5,10 +5,12 @@ import (
 	"verification_studio/mats"
 )
 
-// DatesConfig specifies the verification time window for surface and upper-air.
+// DatesConfig specifies the verification time window for individual meteorological elements.
 type DatesConfig struct {
 	Surface  string `json:"surface"`
 	UpperAir string `json:"upperair"`
+	Radar    string `json:"radar,omitempty"`
+	CeilVis  string `json:"ceilvis,omitempty"`
 }
 
 // Config defines the full configuration for compiling reports.

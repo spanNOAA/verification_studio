@@ -84,6 +84,16 @@ func BuildHTMLReport(cfg Config, matsDir, outputHTML string, slidesData []SlideD
 				uaD = "N/A"
 			}
 
+			var dateLines []string
+			dateLines = append(dateLines, fmt.Sprintf("<div><strong>Surface:</strong> %s</div>", sfcD))
+			dateLines = append(dateLines, fmt.Sprintf("<div><strong>Upper-Air:</strong> %s</div>", uaD))
+			if slide.Dates.Radar != "" && slide.Dates.Radar != slide.Dates.Surface {
+				dateLines = append(dateLines, fmt.Sprintf("<div><strong>Radar:</strong> %s</div>", html.EscapeString(slide.Dates.Radar)))
+			}
+			if slide.Dates.CeilVis != "" && slide.Dates.CeilVis != slide.Dates.Surface {
+				dateLines = append(dateLines, fmt.Sprintf("<div><strong>Ceil/Vis:</strong> %s</div>", html.EscapeString(slide.Dates.CeilVis)))
+			}
+
 			slideContent = fmt.Sprintf(`
 			<div class="title-slide-container">
 			  <div class="title-hero">
@@ -95,8 +105,7 @@ func BuildHTMLReport(cfg Config, matsDir, outputHTML string, slidesData []SlideD
 			      <h3>Evaluated Experiments:</h3>
 			      <div class="models-grid">%s</div>
 			      <div class="date-ranges">
-			        <div><strong>Surface Period:</strong> %s</div>
-			        <div><strong>Upper-Air Period:</strong> %s</div>
+			        %s
 			      </div>
 			    </div>
 			    <div class="sources-panel">
@@ -105,7 +114,7 @@ func BuildHTMLReport(cfg Config, matsDir, outputHTML string, slidesData []SlideD
 			    </div>
 			  </div>
 			</div>
-			`, safeTitle, strings.Join(modelChips, ""), sfcD, uaD, strings.Join(bulletsHTML, ""))
+			`, safeTitle, strings.Join(modelChips, ""), strings.Join(dateLines, "\n			        "), strings.Join(bulletsHTML, ""))
 
 		case "3panel":
 			img1 := relImg(slide.Img1)
