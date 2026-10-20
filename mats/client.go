@@ -344,7 +344,7 @@ func (c *Client) ExportStyledChart(ctx context.Context, outPath string, colorMap
 			}
 
 			const isBias = trace.name.toLowerCase().includes("bias");
-			const color = matchedColor || (trace.line && trace.line.color) || "#2563eb";
+			const color = matchedColor || (trace.line && trace.line.color) || "#1d4ed8";
 			const shortName = matchedModel ? matchedModel.name : rawSource;
 
 			if (trace.line) {

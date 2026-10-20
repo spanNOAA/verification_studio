@@ -67,7 +67,7 @@ func BuildHTMLReport(cfg Config, matsDir, outputHTML string, slidesData []SlideD
 			for _, m := range slide.Models {
 				color := m.Color
 				if color == "" {
-					color = "#2563eb"
+					color = "#1d4ed8"
 				}
 				modelChips = append(modelChips, fmt.Sprintf(
 					`<span class="model-badge" style="border-left: 5px solid %s"><strong>%s</strong> <small>(%s)</small></span>`,

@@ -9,16 +9,16 @@ type Model struct {
 	Cluster string `json:"cluster,omitempty"`
 }
 
-// DefaultPalette provides standard high-contrast distinct colors for curves.
+// DefaultPalette provides standard high-contrast distinct colors for curves (Modern Tech).
 var DefaultPalette = []string{
-	"#2563eb", // Royal Blue
-	"#dc2626", // Crimson Red
-	"#16a34a", // Forest Green
-	"#9333ea", // Vibrant Purple
-	"#ea580c", // Deep Orange
-	"#0891b2", // Teal / Cyan
-	"#475569", // Slate Grey
-	"#ca8a04", // Dark Yellow / Gold
+	"#1d4ed8", // Deep Tech Blue
+	"#ef4444", // Bright Red
+	"#059669", // Emerald Green
+	"#f59e0b", // Amber Gold
+	"#7e22ce", // Deep Violet
+	"#06b6d4", // Electric Cyan
+	"#1e293b", // Slate Charcoal
+	"#e11d48", // Rose Red
 }
 
 // RegionNameMap maps internal region identifiers to human-readable names.

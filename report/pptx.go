@@ -76,41 +76,24 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 		tx.SetOffsetX(7313400).SetOffsetY(2958262).SetWidth(1650000).SetHeight(1600000)
 		tx.SetWordWrap(true)
 
-		type textSpec struct {
-			Text string
-			Bold bool
-			Size int
-		}
-		var lines []textSpec
-		lines = append(lines, textSpec{Text: "Experiments:", Bold: true, Size: 11})
+		var items []legendItem
+		items = append(items, legendItem{Text: "Experiments:", Bold: true, Size: 11})
 		for _, m := range models {
-			lines = append(lines, textSpec{Text: "• " + m.Name, Bold: false, Size: 10})
+			items = append(items, legendItem{Text: m.Name, DotColor: m.Color, Size: 10})
 		}
 		if isBias {
-			lines = append(lines, textSpec{Text: "Metric:", Bold: true, Size: 11})
-			lines = append(lines, textSpec{Text: "• Dash: BIAS", Bold: false, Size: 10})
+			items = append(items, legendItem{Text: "Metric:", Bold: true, Size: 11})
+			items = append(items, legendItem{Text: "Dash: BIAS", SymText: "┄┄┄┄ ", Size: 10})
 		} else if metric == "COMBINED" {
-			lines = append(lines, textSpec{Text: "Styles:", Bold: true, Size: 11})
-			lines = append(lines, textSpec{Text: "• Solid: RMSE", Bold: false, Size: 10})
-			lines = append(lines, textSpec{Text: "• Dash: BIAS", Bold: false, Size: 10})
+			items = append(items, legendItem{Text: "Styles:", Bold: true, Size: 11})
+			items = append(items, legendItem{Text: "Solid: RMSE", SymText: "━━━━ ", Size: 10})
+			items = append(items, legendItem{Text: "Dash: BIAS", SymText: "┄┄┄┄ ", Size: 10})
 		} else {
-			lines = append(lines, textSpec{Text: "Metric:", Bold: true, Size: 11})
-			lines = append(lines, textSpec{Text: "• Solid: " + metric, Bold: false, Size: 10})
+			items = append(items, legendItem{Text: "Metric:", Bold: true, Size: 11})
+			items = append(items, legendItem{Text: "Solid: " + metric, SymText: "━━━━ ", Size: 10})
 		}
 
-		for idx, spec := range lines {
-			var p *goppt.Paragraph
-			if idx == 0 {
-				p = tx.GetActiveParagraph()
-				if p == nil {
-					p = tx.CreateParagraph()
-				}
-			} else {
-				p = tx.CreateParagraph()
-			}
-			tr := p.CreateTextRun(spec.Text)
-			tr.GetFont().SetSize(spec.Size).SetBold(spec.Bold)
-		}
+		renderLegendItems(tx, items)
 	}
 
 	add3PanelSlide := func(title, f1, f2, f3, l1, l2, l3 string, isBias bool, metric, region string) bool {
@@ -264,38 +247,21 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 		leg.SetOffsetX(xLeg).SetOffsetY(int64(1.10 * 914400)).SetWidth(wLeg).SetHeight(int64(3.80 * 914400))
 		leg.SetWordWrap(true)
 
-		type textSpec struct {
-			Text string
-			Bold bool
-			Size int
-		}
-		var lines []textSpec
-		lines = append(lines, textSpec{Text: "Experiments:", Bold: true, Size: 11})
+		var items []legendItem
+		items = append(items, legendItem{Text: "Experiments:", Bold: true, Size: 11})
 		for _, m := range models {
-			lines = append(lines, textSpec{Text: "• " + m.Name, Bold: false, Size: 10})
+			items = append(items, legendItem{Text: m.Name, DotColor: m.Color, Size: 10})
 		}
-		lines = append(lines,
-			textSpec{Text: "Columns:", Bold: true, Size: 11},
-			textSpec{Text: "• Left: " + col1Name, Bold: false, Size: 10},
-			textSpec{Text: "• Right: " + col2Name, Bold: false, Size: 10},
-			textSpec{Text: "Line Styles:", Bold: true, Size: 11},
-			textSpec{Text: "• Solid: " + col1Name, Bold: false, Size: 10},
-			textSpec{Text: "• Dash: " + col2Name, Bold: false, Size: 10},
+		items = append(items,
+			legendItem{Text: "Columns:", Bold: true, Size: 11},
+			legendItem{Text: "Left: " + col1Name, SymText: "• ", Size: 10},
+			legendItem{Text: "Right: " + col2Name, SymText: "• ", Size: 10},
+			legendItem{Text: "Line Styles:", Bold: true, Size: 11},
+			legendItem{Text: "Solid: " + col1Name, SymText: "━━━━ ", Size: 10},
+			legendItem{Text: "Dash: " + col2Name, SymText: "┄┄┄┄ ", Size: 10},
 		)
 
-		for idx, spec := range lines {
-			var p *goppt.Paragraph
-			if idx == 0 {
-				p = leg.GetActiveParagraph()
-				if p == nil {
-					p = leg.CreateParagraph()
-				}
-			} else {
-				p = leg.CreateParagraph()
-			}
-			tr := p.CreateTextRun(spec.Text)
-			tr.GetFont().SetSize(spec.Size).SetBold(spec.Bold)
-		}
+		renderLegendItems(leg, items)
 
 		slidesData = append(slidesData, SlideData{
 			Type:     "integrated_ts",
@@ -827,24 +793,27 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 	return slidesData, nil
 }
 
-func renderProfileLegend(tx *goppt.RichTextShape, models []mats.Model) {
-	type textSpec struct {
-		Text string
-		Bold bool
-		Size int
+func hexToARGB(hexStr string) string {
+	clean := strings.TrimPrefix(hexStr, "#")
+	if len(clean) == 6 {
+		return "FF" + strings.ToUpper(clean)
 	}
-	var lines []textSpec
-	lines = append(lines, textSpec{Text: "Experiments:", Bold: true, Size: 11})
-	for _, m := range models {
-		lines = append(lines, textSpec{Text: "• " + m.Name, Bold: false, Size: 10})
+	if len(clean) == 8 {
+		return strings.ToUpper(clean)
 	}
-	lines = append(lines,
-		textSpec{Text: "Line Styles:", Bold: true, Size: 11},
-		textSpec{Text: "• Solid: RMSE", Bold: false, Size: 10},
-		textSpec{Text: "• Dash: BIAS", Bold: false, Size: 10},
-	)
+	return "FF1E293B"
+}
 
-	for idx, spec := range lines {
+type legendItem struct {
+	DotColor string
+	SymText  string
+	Text     string
+	Bold     bool
+	Size     int
+}
+
+func renderLegendItems(tx *goppt.RichTextShape, items []legendItem) {
+	for idx, item := range items {
 		var p *goppt.Paragraph
 		if idx == 0 {
 			p = tx.GetActiveParagraph()
@@ -854,9 +823,37 @@ func renderProfileLegend(tx *goppt.RichTextShape, models []mats.Model) {
 		} else {
 			p = tx.CreateParagraph()
 		}
-		tr := p.CreateTextRun(spec.Text)
-		tr.GetFont().SetSize(spec.Size).SetBold(spec.Bold)
+
+		if item.DotColor != "" {
+			dot := p.CreateTextRun("● ")
+			dot.GetFont().SetSize(item.Size).SetColor(goppt.NewColor(hexToARGB(item.DotColor)))
+			txt := p.CreateTextRun(item.Text)
+			txt.GetFont().SetSize(item.Size).SetBold(false).SetColor(goppt.NewColor("FF334155"))
+		} else if item.SymText != "" {
+			sym := p.CreateTextRun(item.SymText)
+			sym.GetFont().SetSize(item.Size).SetBold(true).SetColor(goppt.NewColor("FF475569"))
+			txt := p.CreateTextRun(item.Text)
+			txt.GetFont().SetSize(item.Size).SetBold(false).SetColor(goppt.NewColor("FF334155"))
+		} else {
+			tr := p.CreateTextRun(item.Text)
+			tr.GetFont().SetSize(item.Size).SetBold(item.Bold).SetColor(goppt.NewColor("FF1E293B"))
+		}
 	}
+}
+
+func renderProfileLegend(tx *goppt.RichTextShape, models []mats.Model) {
+	var items []legendItem
+	items = append(items, legendItem{Text: "Experiments:", Bold: true, Size: 11})
+	for _, m := range models {
+		items = append(items, legendItem{Text: m.Name, DotColor: m.Color, Size: 10})
+	}
+	items = append(items,
+		legendItem{Text: "Line Styles:", Bold: true, Size: 11},
+		legendItem{Text: "Solid: RMSE", SymText: "━━━━ ", Size: 10},
+		legendItem{Text: "Dash: BIAS", SymText: "┄┄┄┄ ", Size: 10},
+	)
+
+	renderLegendItems(tx, items)
 }
 
 func isFileValid(path string) bool {
