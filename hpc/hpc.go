@@ -321,15 +321,6 @@ func DownloadRadarImages(
 				onProgress(int(100*float64(currentItem)/float64(totalItems)), fmt.Sprintf("Downloading %s", localFilename))
 			}
 
-			// Determine candidate base paths (fallback for _da or _noda suffixes if directory is named without suffix)
-			basePaths := []string{basePath}
-			if trimmed := strings.TrimSuffix(basePath, "_da"); trimmed != basePath {
-				basePaths = append(basePaths, trimmed)
-			}
-			if trimmed := strings.TrimSuffix(basePath, "_noda"); trimmed != basePath {
-				basePaths = append(basePaths, trimmed)
-			}
-
 			// Dynamically determine system prefixes (e.g. "arps" from "arps_noda", "rrfs" from "rrfs_exp")
 			sysPrefixes := []string{"arps", "rrfs"}
 			if p := strings.ToLower(strings.Split(shortName, "_")[0]); p != "" && p != "arps" && p != "rrfs" {
@@ -337,21 +328,19 @@ func DownloadRadarImages(
 			}
 
 			var candidates []string
-			for _, bp := range basePaths {
-				for _, sys := range sysPrefixes {
-					candidates = append(candidates,
-						fmt.Sprintf("%s/com/%s/v2.1.4/%s.%s/%s/graphics/det/full/%s/cref_full_sfc_f%s.png", bp, sys, sys, c.Date, c.Cycle, fhrDir, fhrStr),
-						fmt.Sprintf("%s/%s.%s/%s/graphics/det/full/%s/cref_full_sfc_f%s.png", bp, sys, c.Date, c.Cycle, fhrDir, fhrStr),
-						fmt.Sprintf("%s/com/%s/v2.1.4/%s.%s/%s/det/graphics/full/%s/cref_full_sfc_f%s.png", bp, sys, sys, c.Date, c.Cycle, fhrDir, fhrStr),
-					)
-				}
+			for _, sys := range sysPrefixes {
 				candidates = append(candidates,
-					fmt.Sprintf("%s/graphics/det/full/%s/cref_full_sfc_f%s.png", bp, fhrDir, fhrStr),
-					fmt.Sprintf("%s/%s/cref_full_sfc_f%s.png", bp, fhrDir, fhrStr),
-					fmt.Sprintf("%s/%s%s/cref_full_sfc_f%s.png", bp, c.Date, c.Cycle, fhrStr),
-					fmt.Sprintf("%s/cref_full_sfc_f%s.png", bp, fhrStr),
+					fmt.Sprintf("%s/com/%s/v2.1.4/%s.%s/%s/graphics/det/full/%s/cref_full_sfc_f%s.png", basePath, sys, sys, c.Date, c.Cycle, fhrDir, fhrStr),
+					fmt.Sprintf("%s/%s.%s/%s/graphics/det/full/%s/cref_full_sfc_f%s.png", basePath, sys, c.Date, c.Cycle, fhrDir, fhrStr),
+					fmt.Sprintf("%s/com/%s/v2.1.4/%s.%s/%s/det/graphics/full/%s/cref_full_sfc_f%s.png", basePath, sys, sys, c.Date, c.Cycle, fhrDir, fhrStr),
 				)
 			}
+			candidates = append(candidates,
+				fmt.Sprintf("%s/graphics/det/full/%s/cref_full_sfc_f%s.png", basePath, fhrDir, fhrStr),
+				fmt.Sprintf("%s/%s/cref_full_sfc_f%s.png", basePath, fhrDir, fhrStr),
+				fmt.Sprintf("%s/%s%s/cref_full_sfc_f%s.png", basePath, c.Date, c.Cycle, fhrStr),
+				fmt.Sprintf("%s/cref_full_sfc_f%s.png", basePath, fhrStr),
+			)
 
 			if isRemote {
 				downloaded := false
