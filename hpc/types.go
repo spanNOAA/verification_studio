@@ -64,7 +64,7 @@ var Clusters = map[string]ClusterInfo{
 		AliasCandidates: []string{"Gaeac5", "gaea-c5", "gaeac5", "c5", "Gaea", "gaea"},
 		Description:     "NOAA RDHPCS Gaea C5 (gaea51~56, /gpfs/f5)",
 		TimeoutInit:     60,
-		PromptRegex:     regexp.MustCompile(`(?i)([a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*[:\s].*?[#$%>]|gaea\d+[\w\.\-]*[:\s].*?[#$%>]|\[[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*.*?\][$#>]|:~[>#])`),
+		PromptRegex:     regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*.*?\]\s*[$#>]|[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*:[^$#>\n\r]*[$#>]|:~[>#])`),
 	},
 	"gaea-c6": {
 		SSHHost:         "Gaeac6",
@@ -72,7 +72,7 @@ var Clusters = map[string]ClusterInfo{
 		AliasCandidates: []string{"Gaeac6", "gaea-c6", "gaeac6", "c6"},
 		Description:     "NOAA RDHPCS Gaea C6 (gaea61~66, /gpfs/f6)",
 		TimeoutInit:     60,
-		PromptRegex:     regexp.MustCompile(`(?i)([a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*[:\s].*?[#$%>]|gaea\d+[\w\.\-]*[:\s].*?[#$%>]|\[[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*.*?\][$#>]|:~[>#])`),
+		PromptRegex:     regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*.*?\]\s*[$#>]|[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*:[^$#>\n\r]*[$#>]|:~[>#])`),
 	},
 	"gaea-c7": {
 		SSHHost:         "Gaeac7",
@@ -80,7 +80,7 @@ var Clusters = map[string]ClusterInfo{
 		AliasCandidates: []string{"Gaeac7", "gaea-c7", "gaeac7", "c7"},
 		Description:     "NOAA RDHPCS Gaea C7 (gaea71~76, /gpfs/f7)",
 		TimeoutInit:     90,
-		PromptRegex:     regexp.MustCompile(`(?i)([a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*[:\s].*?[#$%>]|gaea\d+[\w\.\-]*[:\s].*?[#$%>]|\[[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*.*?\][$#>]|:~[>#])`),
+		PromptRegex:     regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*.*?\]\s*[$#>]|[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*:[^$#>\n\r]*[$#>]|:~[>#])`),
 	},
 	"hera": {
 		SSHHost:         "Hera",
@@ -137,7 +137,7 @@ var ClusterAliases = map[string]string{
 var GenericPromptRegex = regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@[^\]\n\r]+\]\s*[$#>%\s]*$|[a-zA-Z0-9_\.\-]+@[a-zA-Z0-9_\.\-]+[:\s][^$#>\n\r]*[$#>%\s]*$|:~[>#]\s*$)`)
 
 // TailPromptRegex scans the trailing non-empty line of a shell session for typical interactive prompts.
-var TailPromptRegex = regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@[^\]\n\r]+\]\s*[$#>%\s]*$|[a-zA-Z0-9_\.\-]+@[a-zA-Z0-9_\.\-]+[:\s].*?[$#>%\s]*$|:~[>#]|\b(gaea\d+|c5|c6|c7|hfe\d+|ufe\d+|orion|hercules)[\w\.\-]*[:\s].*?[$#>%\s]*$)`)
+var TailPromptRegex = regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@[^\]\n\r]+\]\s*[$#>%\s]*$|[a-zA-Z0-9_\.\-]+@[a-zA-Z0-9_\.\-]+:[^$#>\n\r]*[$#>%\s]*$|:~[>#]|\b(gaea\d+|hfe\d+|ufe\d+|orion|hercules)[\w\.\-]*:[^$#>\n\r]*[$#>%\s]*$)`)
 
 // IsPromptDetected checks raw and cleaned buffers for cluster-specific, generic, and tail-line shell prompts.
 func IsPromptDetected(buf, cleaned []byte, clusterRegex *regexp.Regexp) bool {
