@@ -78,9 +78,9 @@ var Clusters = map[string]ClusterInfo{
 		SSHHost:         "Gaeac7",
 		CanonicalHost:   "gaea-c7.fairmont.rdhpcs.noaa.gov",
 		AliasCandidates: []string{"Gaeac7", "gaea-c7", "gaeac7", "c7"},
-		Description:     "NOAA RDHPCS Gaea C7 (gaea71~76, /gpfs/f7)",
+		Description:     "NOAA RDHPCS Gaea C7 (gaea70~76, /gpfs/f7)",
 		TimeoutInit:     90,
-		PromptRegex:     regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*.*?\]\s*[$#>]|[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*:[^$#>\n\r]*[$#>]|:~[>#])`),
+		PromptRegex:     regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@(gaea7\d|c7login\d|gaea\d+)[\w\.\-]*.*?\]\s*[$#>]|[a-zA-Z0-9_\.\-]+@(gaea7\d|c7login\d|gaea\d+)[\w\.\-]*:[^$#>\n\r]*[$#>]|:~[>#])`),
 	},
 	"hera": {
 		SSHHost:         "Hera",

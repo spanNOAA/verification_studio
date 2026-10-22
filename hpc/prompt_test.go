@@ -50,6 +50,16 @@ func TestPromptDetection(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "Gaea-C7 gaea74 prompt",
+			input:    "[Sijie.Pan@gaea74 ~]$ ",
+			expected: true,
+		},
+		{
+			name:     "Gaea-C7 gaea76 prompt with path",
+			input:    "[Sijie.Pan@gaea76 /gpfs/f7/wrfruc]$ ",
+			expected: true,
+		},
+		{
 			name:     "Hera hfe prompt",
 			input:    "[Sijie.Pan@hfe01 ~]$ ",
 			expected: true,
@@ -106,6 +116,16 @@ Last login: Sat Oct 17 17:06:17 2026 from gaea-mfa.fairmont.rdhpcs.noaa.gov
 		{
 			name:     "Password prompt",
 			input:    "Password: ",
+			expected: false,
+		},
+		{
+			name:     "Fairmont Bastion cluster selection menu",
+			input:    "Cluster selection menu:\n1) c5\n2) c6\n3) c7\nEnter choice > ",
+			expected: false,
+		},
+		{
+			name:     "Fairmont banner with c7 mention",
+			input:    "Connecting to gaea-c7.fairmont.rdhpcs.noaa.gov...\nAuthenticating user Sijie.Pan\n",
 			expected: false,
 		},
 	}

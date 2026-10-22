@@ -141,16 +141,15 @@ func (d *Daemon) StartSessionHeadless() error {
 			cleaned := ansiCleaner.ReplaceAll(buf, []byte(""))
 			if IsPromptDetected(buf, cleaned, d.promptRegex) {
 				time.Sleep(300 * time.Millisecond)
-				d.Log("Prompt detected! Read-only session to %s established.", strings.ToUpper(d.Cluster))
+				d.Log("Prompt candidate detected. Promoting and verifying session for %s...", strings.ToUpper(d.Cluster))
 
-				// Promote session to standard POSIX /bin/sh to guarantee universal syntax compatibility across all clusters (tcsh, csh, zsh, bash)
-				d.Log("Promoting session to standard POSIX /bin/sh for cluster %s...", strings.ToUpper(d.Cluster))
+				// Promote session to standard POSIX /bin/sh and verify with probe token
 				if err := d.promoteToPOSIXShell(); err != nil {
-					d.Log("Warning: could not promote to /bin/sh: %v", err)
-				} else {
-					d.Log("Successfully promoted session to POSIX /bin/sh.")
+					d.Log("POSIX shell promotion or verification failed: %v. Continuing wait for genuine prompt...", err)
+					continue
 				}
 
+				d.Log("Successfully promoted and verified session to POSIX /bin/sh for cluster %s.", strings.ToUpper(d.Cluster))
 				return nil
 			}
 		}
@@ -175,6 +174,15 @@ func (d *Daemon) promoteToPOSIXShell() error {
 	}
 
 	time.Sleep(200 * time.Millisecond)
+
+	// On Gaea-C7, preferentially hop to one of the last three login nodes (gaea76, gaea75, gaea74)
+	if d.Cluster == "gaea-c7" || d.Cluster == "c7" || d.Cluster == "gaeac7" {
+		hopScript := `case "$(hostname 2>/dev/null)" in gaea74*|gaea75*|gaea76*) ;; *) for _n in gaea76 gaea75 gaea74; do if ssh -q -o ConnectTimeout=2 -o BatchMode=yes $_n "true" 2>/dev/null; then exec ssh -q -t $_n /bin/sh; break; fi; done ;; esac` + "\n"
+		if _, err := d.MasterPty.WriteString(hopScript); err != nil {
+			return fmt.Errorf("failed to write Gaea-C7 node selection command: %w", err)
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
 
 	// Configure basic POSIX environment: set clean prompt, force C locale
 	initScript := "PS1='__HPC_RO_SH__$ '; export PS1 2>/dev/null; export LC_ALL=C 2>/dev/null\n"
