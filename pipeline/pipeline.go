@@ -331,11 +331,22 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			stageIdx++
 			log(">>> [%d/%d] Retrieving Synoptic Radar Forecast Images from HPC Clusters...\n", stageIdx, totalStages)
 			reportProgress(stageIdx, 0, "HPC Radar Retrieval")
-			err = hpc.DownloadRadarImages(models, crefDir, radarCases, req.ForceFetch, func(pct int, msg string) {
-				reportProgress(stageIdx, pct, msg)
-			}, func(s string) { log("%s", s) })
-			if err != nil {
-				log("  [HPC RADAR ERROR] %v\n", err)
+
+			allCached, totalImg := false, 0
+			if !req.ForceFetch {
+				allCached, totalImg = hpc.AllRadarImagesCached(models, crefDir, radarCases)
+			}
+
+			if allCached && totalImg > 0 {
+				log("  [ALL CACHED] All radar forecast images (%d files) already available locally. Skipping HPC authentication & retrieval.\n", totalImg)
+				reportProgress(stageIdx, 100, "All cached locally")
+			} else {
+				err = hpc.DownloadRadarImages(models, crefDir, radarCases, req.ForceFetch, func(pct int, msg string) {
+					reportProgress(stageIdx, pct, msg)
+				}, func(s string) { log("%s", s) })
+				if err != nil {
+					log("  [HPC RADAR ERROR] %v\n", err)
+				}
 			}
 
 			isolateBrowser("MRMS Observations")

@@ -96,7 +96,7 @@ func (c *Client) FetchRadarImages(
 		}
 
 		if err := c.fetchSingleMRMS(cs, targetPath); err != nil {
-			c.Log("    [MRMS WARNING] Error fetching MRMS %s: %v\n", mrmsFn, err)
+			c.Log("    [MRMS ERROR] Failed fetching MRMS %s: %v\n", mrmsFn, err)
 		}
 	}
 
@@ -104,6 +104,16 @@ func (c *Client) FetchRadarImages(
 		onProgress(100, "Done")
 	}
 	return nil
+}
+
+const (
+	maxMRMSAttempts = 3
+	mrmsTabTimeout  = 60 * time.Second
+)
+
+var mrmsRetryDelays = []time.Duration{
+	10 * time.Second,
+	20 * time.Second,
 }
 
 type rectBox struct {
@@ -114,7 +124,26 @@ type rectBox struct {
 }
 
 func (c *Client) fetchSingleMRMS(cs hpc.RadarCase, targetPath string) error {
-	tabCtx, cancel := c.session.NewTab(25 * time.Second)
+	mrmsFn := filepath.Base(targetPath)
+	var lastErr error
+	for attempt := 1; attempt <= maxMRMSAttempts; attempt++ {
+		err := c.tryFetchSingleMRMS(cs, targetPath, attempt, maxMRMSAttempts)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if attempt < maxMRMSAttempts {
+			delay := mrmsRetryDelays[attempt-1]
+			c.Log("    [MRMS RETRY %d/%d] Attempt %d failed for %s: %v. Retrying in %v...\n",
+				attempt, maxMRMSAttempts-1, attempt, mrmsFn, err, delay)
+			time.Sleep(delay)
+		}
+	}
+	return fmt.Errorf("failed after %d attempts: %w", maxMRMSAttempts, lastErr)
+}
+
+func (c *Client) tryFetchSingleMRMS(cs hpc.RadarCase, targetPath string, attempt, maxAttempts int) error {
+	tabCtx, cancel := c.session.NewTab(mrmsTabTimeout)
 	defer cancel()
 
 	// Parse date/time
@@ -137,7 +166,11 @@ func (c *Client) fetchSingleMRMS(cs hpc.RadarCase, targetPath string) error {
 		y, m, d, h, mn,
 	)
 
-	c.Log("  * Fetching MRMS for %s (Valid: %s UTC)...\n", cs.Title, validDt.Format("2006-01-02 15:04"))
+	if attempt == 1 {
+		c.Log("  * Fetching MRMS for %s (Valid: %s UTC)...\n", cs.Title, validDt.Format("2006-01-02 15:04"))
+	} else {
+		c.Log("  * Retrying MRMS for %s (Valid: %s UTC, attempt %d/%d)...\n", cs.Title, validDt.Format("2006-01-02 15:04"), attempt, maxAttempts)
+	}
 
 	if err := chromedp.Do(tabCtx,
 		chromedp.Navigate(url),

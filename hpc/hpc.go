@@ -185,6 +185,35 @@ func findSuggestedUser(target string, models []mats.Model) string {
 	return ResolveCandidateUser(target, "")
 }
 
+// AllRadarImagesCached returns true and the total count if all radar forecast images
+// for models with remote or local paths already exist locally with valid file size (>1000 bytes).
+func AllRadarImagesCached(models []mats.Model, crefDir string, cases []RadarCase) (bool, int) {
+	if len(cases) == 0 {
+		return true, 0
+	}
+	var modelsWithPath []mats.Model
+	for _, m := range models {
+		if m.Path != "" {
+			modelsWithPath = append(modelsWithPath, m)
+		}
+	}
+	if len(modelsWithPath) == 0 {
+		return true, 0
+	}
+	total := len(modelsWithPath) * len(cases)
+	for _, m := range modelsWithPath {
+		shortName := m.Name
+		for _, c := range cases {
+			localFilename := fmt.Sprintf("%s_%s_%sz_f%02d.png", shortName, c.Date, c.Cycle, c.Fhr)
+			localPath := filepath.Join(crefDir, localFilename)
+			if !isFileValid(localPath) {
+				return false, total
+			}
+		}
+	}
+	return true, total
+}
+
 // DownloadRadarImages checks evaluated models for remote HPC or local paths and downloads cref images.
 func DownloadRadarImages(
 	models []mats.Model,
@@ -281,14 +310,26 @@ func DownloadRadarImages(
 				onProgress(int(100*float64(currentItem)/float64(totalItems)), fmt.Sprintf("Downloading %s", localFilename))
 			}
 
-			candidates := []string{
-				fmt.Sprintf("%s/com/rrfs/v2.1.4/rrfs.%s/%s/graphics/det/full/%s/cref_full_sfc_f%s.png", basePath, c.Date, c.Cycle, fhrDir, fhrStr),
-				fmt.Sprintf("%s/rrfs.%s/%s/graphics/det/full/%s/cref_full_sfc_f%s.png", basePath, c.Date, c.Cycle, fhrDir, fhrStr),
+			// Dynamically determine system prefixes (e.g. "arps" from "arps_noda", "rrfs" from "rrfs_exp")
+			sysPrefixes := []string{"arps", "rrfs"}
+			if p := strings.ToLower(strings.Split(shortName, "_")[0]); p != "" && p != "arps" && p != "rrfs" {
+				sysPrefixes = append([]string{p}, sysPrefixes...)
+			}
+
+			var candidates []string
+			for _, sys := range sysPrefixes {
+				candidates = append(candidates,
+					fmt.Sprintf("%s/com/%s/v2.1.4/%s.%s/%s/graphics/det/full/%s/cref_full_sfc_f%s.png", basePath, sys, sys, c.Date, c.Cycle, fhrDir, fhrStr),
+					fmt.Sprintf("%s/%s.%s/%s/graphics/det/full/%s/cref_full_sfc_f%s.png", basePath, sys, c.Date, c.Cycle, fhrDir, fhrStr),
+					fmt.Sprintf("%s/com/%s/v2.1.4/%s.%s/%s/det/graphics/full/%s/cref_full_sfc_f%s.png", basePath, sys, sys, c.Date, c.Cycle, fhrDir, fhrStr),
+				)
+			}
+			candidates = append(candidates,
 				fmt.Sprintf("%s/graphics/det/full/%s/cref_full_sfc_f%s.png", basePath, fhrDir, fhrStr),
 				fmt.Sprintf("%s/%s/cref_full_sfc_f%s.png", basePath, fhrDir, fhrStr),
 				fmt.Sprintf("%s/%s%s/cref_full_sfc_f%s.png", basePath, c.Date, c.Cycle, fhrStr),
 				fmt.Sprintf("%s/cref_full_sfc_f%s.png", basePath, fhrStr),
-			}
+			)
 
 			if isRemote {
 				downloaded := false

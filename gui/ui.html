@@ -207,6 +207,32 @@
       align-items: center;
       margin-bottom: 8px;
     }
+    .dt-header-selects {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .dt-select-compact {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 3px 6px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e293b;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.15s ease;
+    }
+    .dt-select-compact:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
+    .dt-select-compact:focus {
+      border-color: #2563eb;
+      background: #ffffff;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
     .dt-month-year {
       font-size: 13.5px;
       font-weight: 700;
@@ -984,9 +1010,41 @@
   <!-- Unified Popover DateTime Picker Modal -->
   <div id="dtPickerModal" class="dt-picker-modal" style="display: none;">
     <div class="dt-header">
-      <button type="button" class="dt-nav-btn" onclick="dtPrevMonth()">❮</button>
-      <div id="dtMonthYear" class="dt-month-year">May 2024</div>
-      <button type="button" class="dt-nav-btn" onclick="dtNextMonth()">❯</button>
+      <button type="button" class="dt-nav-btn" onclick="dtPrevMonth()" title="Previous Month">❮</button>
+      <div class="dt-header-selects">
+        <select id="dtMonthSelect" class="dt-select-compact" onchange="onDtMonthChange(this.value)">
+          <option value="0">January</option>
+          <option value="1">February</option>
+          <option value="2">March</option>
+          <option value="3">April</option>
+          <option value="4">May</option>
+          <option value="5">June</option>
+          <option value="6">July</option>
+          <option value="7">August</option>
+          <option value="8">September</option>
+          <option value="9">October</option>
+          <option value="10">November</option>
+          <option value="11">December</option>
+        </select>
+        <select id="dtYearSelect" class="dt-select-compact" onchange="onDtYearChange(this.value)">
+          <option value="2018">2018</option>
+          <option value="2019">2019</option>
+          <option value="2020">2020</option>
+          <option value="2021">2021</option>
+          <option value="2022">2022</option>
+          <option value="2023">2023</option>
+          <option value="2024">2024</option>
+          <option value="2025">2025</option>
+          <option value="2026">2026</option>
+          <option value="2027">2027</option>
+          <option value="2028">2028</option>
+          <option value="2029">2029</option>
+          <option value="2030">2030</option>
+          <option value="2031">2031</option>
+          <option value="2032">2032</option>
+        </select>
+      </div>
+      <button type="button" class="dt-nav-btn" onclick="dtNextMonth()" title="Next Month">❯</button>
     </div>
     <div class="dt-weekdays">
       <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
@@ -1310,11 +1368,33 @@
       activeDtInputId = null;
     }
 
+    function onDtMonthChange(val) {
+      pickerMonth = parseInt(val, 10);
+      const daysInMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
+      if (pickerDay > daysInMonth) {
+        pickerDay = daysInMonth;
+      }
+      renderDaysGrid();
+    }
+
+    function onDtYearChange(val) {
+      pickerYear = parseInt(val, 10);
+      const daysInMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
+      if (pickerDay > daysInMonth) {
+        pickerDay = daysInMonth;
+      }
+      renderDaysGrid();
+    }
+
     function dtPrevMonth() {
       pickerMonth--;
       if (pickerMonth < 0) {
         pickerMonth = 11;
         pickerYear--;
+      }
+      const daysInMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
+      if (pickerDay > daysInMonth) {
+        pickerDay = daysInMonth;
       }
       renderDaysGrid();
     }
@@ -1324,6 +1404,10 @@
       if (pickerMonth > 11) {
         pickerMonth = 0;
         pickerYear++;
+      }
+      const daysInMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
+      if (pickerDay > daysInMonth) {
+        pickerDay = daysInMonth;
       }
       renderDaysGrid();
     }
@@ -1360,7 +1444,20 @@
     });
 
     function renderDaysGrid() {
-      document.getElementById('dtMonthYear').textContent = `${MONTH_NAMES[pickerMonth]} ${pickerYear}`;
+      const monthSel = document.getElementById('dtMonthSelect');
+      if (monthSel) {
+        monthSel.value = String(pickerMonth);
+      }
+      const yearSel = document.getElementById('dtYearSelect');
+      if (yearSel) {
+        if (!yearSel.querySelector(`option[value="${pickerYear}"]`)) {
+          const opt = document.createElement('option');
+          opt.value = pickerYear;
+          opt.textContent = pickerYear;
+          yearSel.appendChild(opt);
+        }
+        yearSel.value = String(pickerYear);
+      }
       const grid = document.getElementById('dtDaysGrid');
       grid.innerHTML = '';
 
@@ -1418,6 +1515,45 @@
       const targetId = activeDtInputId;
       document.getElementById(targetId).value = formatted;
       closeDateTimePicker();
+
+      // Master-Slave date propagation:
+      // Surface is the master benchmark. Modifying Surface broadcasts to all other sections.
+      if (targetId === 'sfcStart') {
+        const sfcEnd = document.getElementById('sfcEnd');
+        if (sfcEnd) sfcEnd.value = formatted;
+        const uaStart = document.getElementById('uaStart');
+        if (uaStart) uaStart.value = formatted;
+        const uaEnd = document.getElementById('uaEnd');
+        if (uaEnd) uaEnd.value = formatted;
+        const radarStart = document.getElementById('radarStart');
+        if (radarStart) radarStart.value = formatted;
+        const radarEnd = document.getElementById('radarEnd');
+        if (radarEnd) radarEnd.value = formatted;
+        const ceilvisStart = document.getElementById('ceilvisStart');
+        if (ceilvisStart) ceilvisStart.value = formatted;
+        const ceilvisEnd = document.getElementById('ceilvisEnd');
+        if (ceilvisEnd) ceilvisEnd.value = formatted;
+      } else if (targetId === 'sfcEnd') {
+        const uaEnd = document.getElementById('uaEnd');
+        if (uaEnd) uaEnd.value = formatted;
+        const radarEnd = document.getElementById('radarEnd');
+        if (radarEnd) radarEnd.value = formatted;
+        const ceilvisEnd = document.getElementById('ceilvisEnd');
+        if (ceilvisEnd) ceilvisEnd.value = formatted;
+      } else {
+        // Intra-module auto-advance for independent sub-period customization
+        const fromToMap = {
+          'uaStart': 'uaEnd',
+          'radarStart': 'radarEnd',
+          'ceilvisStart': 'ceilvisEnd'
+        };
+        if (fromToMap[targetId]) {
+          const toInput = document.getElementById(fromToMap[targetId]);
+          if (toInput) {
+            toInput.value = formatted;
+          }
+        }
+      }
 
       if (targetId === 'crefCaseDateTime') {
         onCrefDateTimeChanged();
