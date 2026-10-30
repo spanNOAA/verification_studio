@@ -472,22 +472,32 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 			false, "COMBINED", reg,
 		)
 
+		sfcLeads := mats.SortLeadHours(cfg.SfcLeads)
+		if len(sfcLeads) == 0 {
+			sfcLeads = mats.DefaultSurfaceLeads
+		}
+		uaLeads := mats.SortLeadHours(cfg.UaLeads)
+		if len(uaLeads) == 0 {
+			uaLeads = mats.DefaultUpperAirLeads
+		}
+		radarLeads := mats.SortLeadHours(cfg.RadarLeads)
+		if len(radarLeads) == 0 {
+			radarLeads = mats.DefaultRadarLeads
+		}
+		ceilvisLeads := mats.SortLeadHours(cfg.CeilVisLeads)
+		if len(ceilvisLeads) == 0 {
+			ceilvisLeads = mats.DefaultCeilVisLeads
+		}
+
 		// 2. Surface Time Series
-		for _, item := range []struct {
-			Title string
-			Flead string
-		}{
-			{Title: fmt.Sprintf("Surface 1-h fcst time series%s", regSuffix), Flead: "1h"},
-			{Title: fmt.Sprintf("Surface 3-h fcst time series%s", regSuffix), Flead: "3h"},
-			{Title: fmt.Sprintf("Surface 12-h fcst time series%s", regSuffix), Flead: "12h"},
-			{Title: fmt.Sprintf("Surface 24-h fcst time series%s", regSuffix), Flead: "24h"},
-		} {
+		for _, fhr := range sfcLeads {
+			flead := fhr + "h"
 			addIntegratedTSSlide(
-				item.Title, "RMSE", "BIAS",
+				fmt.Sprintf("Surface %s-h fcst time series%s", fhr, regSuffix), "RMSE", "BIAS",
 				[][3]string{
-					{"t2m", fmt.Sprintf("sfc_ts_%s_rmse_t2m%s.png", item.Flead, regTag), fmt.Sprintf("sfc_ts_%s_bias_t2m%s.png", item.Flead, regTag)},
-					{"td2m", fmt.Sprintf("sfc_ts_%s_rmse_td2m%s.png", item.Flead, regTag), fmt.Sprintf("sfc_ts_%s_bias_td2m%s.png", item.Flead, regTag)},
-					{"Wind 10m", fmt.Sprintf("sfc_ts_%s_rmse_wind10m%s.png", item.Flead, regTag), fmt.Sprintf("sfc_ts_%s_bias_wind10m%s.png", item.Flead, regTag)},
+					{"t2m", fmt.Sprintf("sfc_ts_%s_rmse_t2m%s.png", flead, regTag), fmt.Sprintf("sfc_ts_%s_bias_t2m%s.png", flead, regTag)},
+					{"td2m", fmt.Sprintf("sfc_ts_%s_rmse_td2m%s.png", flead, regTag), fmt.Sprintf("sfc_ts_%s_bias_td2m%s.png", flead, regTag)},
+					{"Wind 10m", fmt.Sprintf("sfc_ts_%s_rmse_wind10m%s.png", flead, regTag), fmt.Sprintf("sfc_ts_%s_bias_wind10m%s.png", flead, regTag)},
 				},
 				reg,
 			)
@@ -513,36 +523,49 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 			)
 		}
 
-		// 4. Upper Air RAOBs Profiles (1h, 3h, 6h, 12h)
-		addProfileSlide(fmt.Sprintf("Upper air 1-h fcst (RAOBs Profile)%s", regSuffix), fmt.Sprintf("ua_prof_1h_temp%s.png", regTag), fmt.Sprintf("ua_prof_1h_wind%s.png", regTag), fmt.Sprintf("ua_prof_1h_rh%s.png", regTag), reg)
-		addProfileSlide(fmt.Sprintf("Upper air 3-h fcst (RAOBs Profile)%s", regSuffix), fmt.Sprintf("ua_prof_3h_temp%s.png", regTag), fmt.Sprintf("ua_prof_3h_wind%s.png", regTag), fmt.Sprintf("ua_prof_3h_rh%s.png", regTag), reg)
-		addProfileSlide(fmt.Sprintf("Upper air 6-h fcst (RAOBs Profile)%s", regSuffix), fmt.Sprintf("ua_prof_6h_temp%s.png", regTag), fmt.Sprintf("ua_prof_6h_wind%s.png", regTag), fmt.Sprintf("ua_prof_6h_rh%s.png", regTag), reg)
-		addProfileSlide(fmt.Sprintf("Upper air 12-h fcst (RAOBs Profile)%s", regSuffix), fmt.Sprintf("ua_prof_12h_temp%s.png", regTag), fmt.Sprintf("ua_prof_12h_wind%s.png", regTag), fmt.Sprintf("ua_prof_12h_rh%s.png", regTag), reg)
+		// 4. Upper Air RAOBs Profiles
+		for _, fhr := range uaLeads {
+			leadTitle := fmt.Sprintf("%s-h fcst", fhr)
+			if fhr == "0" {
+				leadTitle = "Analysis"
+			}
+			addProfileSlide(
+				fmt.Sprintf("Upper air %s (RAOBs Profile)%s", leadTitle, regSuffix),
+				fmt.Sprintf("ua_prof_%sh_temp%s.png", fhr, regTag),
+				fmt.Sprintf("ua_prof_%sh_wind%s.png", fhr, regTag),
+				fmt.Sprintf("ua_prof_%sh_rh%s.png", fhr, regTag),
+				reg,
+			)
+		}
 
 		// AMDAR Profiles (full domain only)
 		if reg == "all" {
-			addProfileSlide("Upper air 1-h fcst (AMDAR Profile)", "amdar_prof_1h_temp.png", "amdar_prof_1h_wind.png", "amdar_prof_1h_rh.png", reg)
-			addProfileSlide("Upper air 3-h fcst (AMDAR Profile)", "amdar_prof_3h_temp.png", "amdar_prof_3h_wind.png", "amdar_prof_3h_rh.png", reg)
-			addProfileSlide("Upper air 6-h fcst (AMDAR Profile)", "amdar_prof_6h_temp.png", "amdar_prof_6h_wind.png", "amdar_prof_6h_rh.png", reg)
-			addProfileSlide("Upper air 12-h fcst (AMDAR Profile)", "amdar_prof_12h_temp.png", "amdar_prof_12h_wind.png", "amdar_prof_12h_rh.png", reg)
+			for _, fhr := range uaLeads {
+				leadTitle := fmt.Sprintf("%s-h fcst", fhr)
+				if fhr == "0" {
+					leadTitle = "Analysis"
+				}
+				addProfileSlide(
+					fmt.Sprintf("Upper air %s (AMDAR Profile)", leadTitle),
+					fmt.Sprintf("amdar_prof_%sh_temp.png", fhr),
+					fmt.Sprintf("amdar_prof_%sh_wind.png", fhr),
+					fmt.Sprintf("amdar_prof_%sh_rh.png", fhr),
+					reg,
+				)
+			}
 		}
 
 		// 5. Radar Reflectivity
 		add3PanelSlide(fmt.Sprintf("CREF Dieoff (CSI )%s", regSuffix), fmt.Sprintf("ref_dieoff_csi_15dbz%s.png", regTag), fmt.Sprintf("ref_dieoff_csi_25dbz%s.png", regTag), fmt.Sprintf("ref_dieoff_csi_35dbz%s.png", regTag), "15 dBZ", "25 dBZ", "35 dBZ", false, "CSI", reg)
 		add3PanelSlide(fmt.Sprintf("CREF Dieoff (BIAS )%s", regSuffix), fmt.Sprintf("ref_dieoff_bias_15dbz%s.png", regTag), fmt.Sprintf("ref_dieoff_bias_25dbz%s.png", regTag), fmt.Sprintf("ref_dieoff_bias_35dbz%s.png", regTag), "15 dBZ", "25 dBZ", "35 dBZ", true, "BIAS", reg)
-		for _, item := range []struct {
-			Title string
-			Flead string
-		}{
-			{Title: fmt.Sprintf("CREF 1-h fcst time series%s", regSuffix), Flead: "1h"},
-			{Title: fmt.Sprintf("CREF 3-h fcst time series%s", regSuffix), Flead: "3h"},
-		} {
+		for _, fhr := range radarLeads {
+			flead := fhr + "h"
 			addIntegratedTSSlide(
-				item.Title, "CSI", "BIAS",
+				fmt.Sprintf("CREF %s-h fcst time series%s", fhr, regSuffix), "CSI", "BIAS",
 				[][3]string{
-					{"15 dBZ", fmt.Sprintf("ref_ts_%s_csi_15dbz%s.png", item.Flead, regTag), fmt.Sprintf("ref_ts_%s_bias_15dbz%s.png", item.Flead, regTag)},
-					{"25 dBZ", fmt.Sprintf("ref_ts_%s_csi_25dbz%s.png", item.Flead, regTag), fmt.Sprintf("ref_ts_%s_bias_25dbz%s.png", item.Flead, regTag)},
-					{"35 dBZ", fmt.Sprintf("ref_ts_%s_csi_35dbz%s.png", item.Flead, regTag), fmt.Sprintf("ref_ts_%s_bias_35dbz%s.png", item.Flead, regTag)},
+					{"15 dBZ", fmt.Sprintf("ref_ts_%s_csi_15dbz%s.png", flead, regTag), fmt.Sprintf("ref_ts_%s_bias_15dbz%s.png", flead, regTag)},
+					{"25 dBZ", fmt.Sprintf("ref_ts_%s_csi_25dbz%s.png", flead, regTag), fmt.Sprintf("ref_ts_%s_bias_25dbz%s.png", flead, regTag)},
+					{"35 dBZ", fmt.Sprintf("ref_ts_%s_csi_35dbz%s.png", flead, regTag), fmt.Sprintf("ref_ts_%s_bias_35dbz%s.png", flead, regTag)},
 				},
 				reg,
 			)
@@ -551,19 +574,14 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 		// 6. Cloud Ceiling
 		add3PanelSlide(fmt.Sprintf("Ceiling Dieoff (CSI)%s", regSuffix), fmt.Sprintf("ceil_dieoff_csi_500ft%s.png", regTag), fmt.Sprintf("ceil_dieoff_csi_1000ft%s.png", regTag), fmt.Sprintf("ceil_dieoff_csi_3000ft%s.png", regTag), "< 500 ft", "< 1000 ft", "< 3000 ft", false, "CSI", reg)
 		add3PanelSlide(fmt.Sprintf("Ceiling Dieoff (BIAS)%s", regSuffix), fmt.Sprintf("ceil_dieoff_bias_500ft%s.png", regTag), fmt.Sprintf("ceil_dieoff_bias_1000ft%s.png", regTag), fmt.Sprintf("ceil_dieoff_bias_3000ft%s.png", regTag), "< 500 ft", "< 1000 ft", "< 3000 ft", true, "BIAS", reg)
-		for _, item := range []struct {
-			Title string
-			Flead string
-		}{
-			{Title: fmt.Sprintf("Ceiling 1-h fcst time series%s", regSuffix), Flead: "1h"},
-			{Title: fmt.Sprintf("Ceiling 3-h fcst time series%s", regSuffix), Flead: "3h"},
-		} {
+		for _, fhr := range ceilvisLeads {
+			flead := fhr + "h"
 			addIntegratedTSSlide(
-				item.Title, "CSI", "BIAS",
+				fmt.Sprintf("Ceiling %s-h fcst time series%s", fhr, regSuffix), "CSI", "BIAS",
 				[][3]string{
-					{"< 500 ft", fmt.Sprintf("ceil_ts_%s_csi_500ft%s.png", item.Flead, regTag), fmt.Sprintf("ceil_ts_%s_bias_500ft%s.png", item.Flead, regTag)},
-					{"< 1000 ft", fmt.Sprintf("ceil_ts_%s_csi_1000ft%s.png", item.Flead, regTag), fmt.Sprintf("ceil_ts_%s_bias_1000ft%s.png", item.Flead, regTag)},
-					{"< 3000 ft", fmt.Sprintf("ceil_ts_%s_csi_3000ft%s.png", item.Flead, regTag), fmt.Sprintf("ceil_ts_%s_bias_3000ft%s.png", item.Flead, regTag)},
+					{"< 500 ft", fmt.Sprintf("ceil_ts_%s_csi_500ft%s.png", flead, regTag), fmt.Sprintf("ceil_ts_%s_bias_500ft%s.png", flead, regTag)},
+					{"< 1000 ft", fmt.Sprintf("ceil_ts_%s_csi_1000ft%s.png", flead, regTag), fmt.Sprintf("ceil_ts_%s_bias_1000ft%s.png", flead, regTag)},
+					{"< 3000 ft", fmt.Sprintf("ceil_ts_%s_csi_3000ft%s.png", flead, regTag), fmt.Sprintf("ceil_ts_%s_bias_3000ft%s.png", flead, regTag)},
 				},
 				reg,
 			)
@@ -572,19 +590,14 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 		// 7. Visibility
 		add3PanelSlide(fmt.Sprintf("Visibility Dieoff (CSI)%s", regSuffix), fmt.Sprintf("vis_dieoff_csi_1mi%s.png", regTag), fmt.Sprintf("vis_dieoff_csi_3mi%s.png", regTag), fmt.Sprintf("vis_dieoff_csi_5mi%s.png", regTag), "< 1 mi", "< 3 mi", "< 5 mi", false, "CSI", reg)
 		add3PanelSlide(fmt.Sprintf("Visibility Dieoff (BIAS)%s", regSuffix), fmt.Sprintf("vis_dieoff_bias_1mi%s.png", regTag), fmt.Sprintf("vis_dieoff_bias_3mi%s.png", regTag), fmt.Sprintf("vis_dieoff_bias_5mi%s.png", regTag), "< 1 mi", "< 3 mi", "< 5 mi", true, "BIAS", reg)
-		for _, item := range []struct {
-			Title string
-			Flead string
-		}{
-			{Title: fmt.Sprintf("Visibility 1-h fcst time series%s", regSuffix), Flead: "1h"},
-			{Title: fmt.Sprintf("Visibility 3-h fcst time series%s", regSuffix), Flead: "3h"},
-		} {
+		for _, fhr := range ceilvisLeads {
+			flead := fhr + "h"
 			addIntegratedTSSlide(
-				item.Title, "CSI", "BIAS",
+				fmt.Sprintf("Visibility %s-h fcst time series%s", fhr, regSuffix), "CSI", "BIAS",
 				[][3]string{
-					{"< 1 mi", fmt.Sprintf("vis_ts_%s_csi_1mi%s.png", item.Flead, regTag), fmt.Sprintf("vis_ts_%s_bias_1mi%s.png", item.Flead, regTag)},
-					{"< 3 mi", fmt.Sprintf("vis_ts_%s_csi_3mi%s.png", item.Flead, regTag), fmt.Sprintf("vis_ts_%s_bias_3mi%s.png", item.Flead, regTag)},
-					{"< 5 mi", fmt.Sprintf("vis_ts_%s_csi_5mi%s.png", item.Flead, regTag), fmt.Sprintf("vis_ts_%s_bias_5mi%s.png", item.Flead, regTag)},
+					{"< 1 mi", fmt.Sprintf("vis_ts_%s_csi_1mi%s.png", flead, regTag), fmt.Sprintf("vis_ts_%s_bias_1mi%s.png", flead, regTag)},
+					{"< 3 mi", fmt.Sprintf("vis_ts_%s_csi_3mi%s.png", flead, regTag), fmt.Sprintf("vis_ts_%s_bias_3mi%s.png", flead, regTag)},
+					{"< 5 mi", fmt.Sprintf("vis_ts_%s_csi_5mi%s.png", flead, regTag), fmt.Sprintf("vis_ts_%s_bias_5mi%s.png", flead, regTag)},
 				},
 				reg,
 			)

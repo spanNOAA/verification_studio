@@ -638,6 +638,122 @@
       border-radius: 6px;
     }
 
+    /* Forecast Lead Hours Matrix Styles */
+    .fhr-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .fhr-module-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 9px 12px;
+      transition: border-color 0.15s ease;
+    }
+    .fhr-module-box:hover {
+      border-color: #cbd5e1;
+    }
+    .fhr-module-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .fhr-module-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .fhr-icon {
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 5px;
+      font-size: 11px;
+    }
+    .fhr-sub-info {
+      font-size: 11px;
+      color: #64748b;
+    }
+    .fhr-controls {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .fhr-counter {
+      font-size: 11px;
+      color: #64748b;
+      margin-right: 4px;
+    }
+    .fhr-btn-action {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 1px 7px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #475569;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .fhr-btn-action:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+      border-color: #94a3b8;
+    }
+    .fhr-chips-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      padding-top: 2px;
+    }
+    .fhr-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 9px;
+      font-size: 11.5px;
+      font-weight: 500;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      background: #ffffff;
+      color: #475569;
+      cursor: pointer;
+      transition: all 0.15s ease-in-out;
+      user-select: none;
+      position: relative;
+    }
+    .fhr-chip:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+    .fhr-chip.active {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #1d4ed8;
+      box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25);
+      font-weight: 600;
+    }
+    .fhr-chip.default-hint::after {
+      content: '';
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 3.5px;
+      height: 3.5px;
+      border-radius: 50%;
+      background-color: currentColor;
+      opacity: 0.8;
+    }
+
     /* Wide Screen Responsive Layout (Zero-scroll App Shell: Header fixed, columns fill window height perfectly) */
     @media (min-width: 1024px) {
       html, body {
@@ -854,6 +970,96 @@
                 <label style="font-size:13px; font-weight: 500; cursor:pointer;" title="Western HRRR domain / West of 109W / Complex Terrain"><input type="checkbox" id="regWest"> 🏔️ Western Region (Complex Terrain)</label>
               </div>
               <div class="form-hint" style="margin-top: 4px;">Full Domain is evaluated as baseline. Check Eastern and/or Western to append dedicated regional evaluation chapters in PowerPoint and tabbed views in HTML.</div>
+            </div>
+          </div>
+          <div class="row" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+            <div class="col">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                <div>
+                  <label class="form-label" style="margin-bottom: 2px; display:flex; align-items:center; gap:6px;">
+                    <span>⏱️ Forecast Lead Hours Matrix</span>
+                    <span style="font-size:11px; font-weight:normal; color:#64748b;">(Chips with dot • indicate default baseline leads)</span>
+                  </label>
+                  <div class="form-hint" style="margin-top: 0;">Customize verification forecast lead hours independently for each meteorological evaluation component.</div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" style="font-size:11.5px; padding:3px 9px;" onclick="resetAllFhrDefaults()">
+                  🔄 Reset All Defaults
+                </button>
+              </div>
+
+              <div class="fhr-grid">
+                <!-- Module 1: Surface Time Series -->
+                <div class="fhr-module-box">
+                  <div class="fhr-module-header">
+                    <div class="fhr-module-title">
+                      <span class="fhr-icon" style="background:#dcfce7; color:#15803d;">🌱</span>
+                      <span style="font-size:12px; font-weight:700; color:#1e293b;">Surface Time Series</span>
+                      <span class="fhr-sub-info">(T2m, Td2m, Wind 10m • RMSE & Bias)</span>
+                    </div>
+                    <div class="fhr-controls">
+                      <span class="fhr-counter">Selected: <strong id="count-sfc" style="color:#2563eb;">4</strong> leads</span>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroup('sfc', ['1','3','12','24'])">Default</button>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('sfc', true)">All</button>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('sfc', false)">Clear</button>
+                    </div>
+                  </div>
+                  <div id="pills-sfc" class="fhr-chips-container"></div>
+                </div>
+
+                <!-- Module 2: Upper Air Profiles -->
+                <div class="fhr-module-box">
+                  <div class="fhr-module-header">
+                    <div class="fhr-module-title">
+                      <span class="fhr-icon" style="background:#e0f2fe; color:#0369a1;">🎈</span>
+                      <span style="font-size:12px; font-weight:700; color:#1e293b;">Upper Air Vertical Profiles</span>
+                      <span class="fhr-sub-info">(RAOBs & AMDAR • Temp, Wind, RH Profiles)</span>
+                    </div>
+                    <div class="fhr-controls">
+                      <span class="fhr-counter">Selected: <strong id="count-ua" style="color:#2563eb;">4</strong> leads</span>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroup('ua', ['1','3','6','12'])">Default</button>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('ua', true)">All</button>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('ua', false)">Clear</button>
+                    </div>
+                  </div>
+                  <div id="pills-ua" class="fhr-chips-container"></div>
+                </div>
+
+                <!-- Module 3: Radar Reflectivity Time Series -->
+                <div class="fhr-module-box">
+                  <div class="fhr-module-header">
+                    <div class="fhr-module-title">
+                      <span class="fhr-icon" style="background:#f3e8ff; color:#7e22ce;">📡</span>
+                      <span style="font-size:12px; font-weight:700; color:#1e293b;">Radar Reflectivity Time Series</span>
+                      <span class="fhr-sub-info">(CREF 15, 25, 35 dBZ • CSI & Bias • Max 42h)</span>
+                    </div>
+                    <div class="fhr-controls">
+                      <span class="fhr-counter">Selected: <strong id="count-radar" style="color:#2563eb;">2</strong> leads</span>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroup('radar', ['1','3'])">Default</button>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('radar', true)">All</button>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('radar', false)">Clear</button>
+                    </div>
+                  </div>
+                  <div id="pills-radar" class="fhr-chips-container"></div>
+                </div>
+
+                <!-- Module 4: Cloud Ceiling & Visibility Time Series -->
+                <div class="fhr-module-box">
+                  <div class="fhr-module-header">
+                    <div class="fhr-module-title">
+                      <span class="fhr-icon" style="background:#fef3c7; color:#b45309;">☁️</span>
+                      <span style="font-size:12px; font-weight:700; color:#1e293b;">Ceiling & Visibility Time Series</span>
+                      <span class="fhr-sub-info">(Ceiling & Visibility Thresholds • CSI & Bias • Max 48h)</span>
+                    </div>
+                    <div class="fhr-controls">
+                      <span class="fhr-counter">Selected: <strong id="count-ceilvis" style="color:#2563eb;">2</strong> leads</span>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroup('ceilvis', ['1','3'])">Default</button>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('ceilvis', true)">All</button>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('ceilvis', false)">Clear</button>
+                    </div>
+                  </div>
+                  <div id="pills-ceilvis" class="fhr-chips-container"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1775,11 +1981,94 @@
       summaryEl.textContent = `${activeRadarCases.length} Case${activeRadarCases.length > 1 ? 's' : ''} · ${totalSlides} Slides`;
     }
 
+    // Forecast Lead Hours Configuration Matrix
+    const FHR_MODULES = {
+      sfc: {
+        all: ['1','2','3','6','9','12','15','18','21','24','30','36','42','48'],
+        defaults: ['1','3','12','24']
+      },
+      ua: {
+        all: ['0','1','2','3','6','9','12','15','18','24','30','36','42','48'],
+        defaults: ['1','3','6','12']
+      },
+      radar: {
+        all: ['1','2','3','4','5','6','9','12','15','18','21','24','30','36','42'],
+        defaults: ['1','3']
+      },
+      ceilvis: {
+        all: ['1','3','6','9','12','15','18','21','24','27','30','36','42','48'],
+        defaults: ['1','3']
+      }
+    };
+
+    const fhrState = {
+      sfc: new Set(FHR_MODULES.sfc.defaults),
+      ua: new Set(FHR_MODULES.ua.defaults),
+      radar: new Set(FHR_MODULES.radar.defaults),
+      ceilvis: new Set(FHR_MODULES.ceilvis.defaults),
+    };
+
+    function renderFhrPills(modKey) {
+      const mod = FHR_MODULES[modKey];
+      const container = document.getElementById(`pills-${modKey}`);
+      if (!container) return;
+      container.innerHTML = '';
+
+      mod.all.forEach(hour => {
+        const isActive = fhrState[modKey].has(hour);
+        const isDefault = mod.defaults.includes(hour);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `fhr-chip ${isActive ? 'active' : ''} ${isDefault ? 'default-hint' : ''}`;
+        btn.innerText = hour === '0' ? '0h (Analysis)' : `${hour}h`;
+        btn.title = isDefault ? `${hour}h is a default recommended lead` : `Toggle ${hour}h verification lead`;
+
+        btn.onclick = () => {
+          if (fhrState[modKey].has(hour)) {
+            fhrState[modKey].delete(hour);
+          } else {
+            fhrState[modKey].add(hour);
+          }
+          renderFhrPills(modKey);
+        };
+
+        container.appendChild(btn);
+      });
+
+      const countEl = document.getElementById(`count-${modKey}`);
+      if (countEl) {
+        countEl.innerText = fhrState[modKey].size;
+      }
+    }
+
+    function setFhrGroup(modKey, hours) {
+      fhrState[modKey] = new Set(hours);
+      renderFhrPills(modKey);
+    }
+
+    function setFhrGroupAll(modKey, selectAll) {
+      if (selectAll) {
+        fhrState[modKey] = new Set(FHR_MODULES[modKey].all);
+      } else {
+        fhrState[modKey].clear();
+      }
+      renderFhrPills(modKey);
+    }
+
+    function resetAllFhrDefaults() {
+      for (const k of ['sfc', 'ua', 'radar', 'ceilvis']) {
+        fhrState[k] = new Set(FHR_MODULES[k].defaults);
+        renderFhrPills(k);
+      }
+    }
+
     // Initialize Radar UI & Badges on startup
     setTimeout(() => {
       onCrefDateTimeChanged();
       renderRadarCasesList();
       updateModelBadge();
+      ['sfc', 'ua', 'radar', 'ceilvis'].forEach(renderFhrPills);
     }, 50);
 
     let pipelineStartTime = null;
@@ -1884,12 +2173,22 @@
       if (document.getElementById('regEast').checked) regions.push('east');
       if (document.getElementById('regWest').checked) regions.push('west');
 
+      const sortLeads = arr => arr.slice().sort((a,b) => parseInt(a, 10) - parseInt(b, 10));
+      const sfcLeads = sortLeads(Array.from(fhrState.sfc));
+      const uaLeads = sortLeads(Array.from(fhrState.ua));
+      const radarLeads = sortLeads(Array.from(fhrState.radar));
+      const ceilvisLeads = sortLeads(Array.from(fhrState.ceilvis));
+
       if (!outputDir) { alert('Please specify an Output Directory!'); return; }
       if (!modelsText) { alert('Please provide at least one Experiment!'); return; }
       if (!sfcStart || !sfcEnd) { alert('Please select a valid Surface Verification Period (From & To)!'); return; }
       if (!uaStart || !uaEnd) { alert('Please select a valid Upper Air Verification Period (From & To)!'); return; }
       if (!radarStart || !radarEnd) { alert('Please select a valid Radar Verification Period (From & To)!'); return; }
       if (!ceilvisStart || !ceilvisEnd) { alert('Please select a valid Ceiling & Visibility Period (From & To)!'); return; }
+      if (sfcLeads.length === 0) { alert('Please select at least one lead hour for Surface Time Series, or click Default.'); return; }
+      if (uaLeads.length === 0) { alert('Please select at least one lead hour for Upper Air Profiles, or click Default.'); return; }
+      if (radarLeads.length === 0) { alert('Please select at least one lead hour for Radar Reflectivity, or click Default.'); return; }
+      if (ceilvisLeads.length === 0) { alert('Please select at least one lead hour for Ceiling & Visibility, or click Default.'); return; }
 
       const btn = document.getElementById('btnStart');
       btn.disabled = true;
@@ -1913,7 +2212,11 @@
         force_fetch: forceFetch,
         include_cref: includeCref,
         radar_cases: activeRadarCases,
-        regions: regions
+        regions: regions,
+        sfc_leads: sfcLeads,
+        ua_leads: uaLeads,
+        radar_leads: radarLeads,
+        ceilvis_leads: ceilvisLeads
       });
 
       if (window.runPipelineNative) {

@@ -187,25 +187,24 @@ type UAProfileConfig struct {
 	VarTag   string
 }
 
-var UAProfileConfigs = []UAProfileConfig{
-	{Fhr: "1", VarLabel: "Temperature", VarTag: "temp"},
-	{Fhr: "1", VarLabel: "Wind", VarTag: "wind"},
-	{Fhr: "1", VarLabel: "RHobT", VarTag: "rh"},
-
-	{Fhr: "3", VarLabel: "Temperature", VarTag: "temp"},
-	{Fhr: "3", VarLabel: "Wind", VarTag: "wind"},
-	{Fhr: "3", VarLabel: "RHobT", VarTag: "rh"},
-
-	{Fhr: "6", VarLabel: "Temperature", VarTag: "temp"},
-	{Fhr: "6", VarLabel: "Wind", VarTag: "wind"},
-	{Fhr: "6", VarLabel: "RHobT", VarTag: "rh"},
-
-	{Fhr: "12", VarLabel: "Temperature", VarTag: "temp"},
-	{Fhr: "12", VarLabel: "Wind", VarTag: "wind"},
-	{Fhr: "12", VarLabel: "RHobT", VarTag: "rh"},
+// BuildUAProfileConfigs constructs vertical profile configurations for given forecast leads.
+func BuildUAProfileConfigs(leads []string) []UAProfileConfig {
+	sortedLeads := SortLeadHours(leads)
+	if len(sortedLeads) == 0 {
+		sortedLeads = DefaultUpperAirLeads
+	}
+	var configs []UAProfileConfig
+	for _, fhr := range sortedLeads {
+		configs = append(configs,
+			UAProfileConfig{Fhr: fhr, VarLabel: "Temperature", VarTag: "temp"},
+			UAProfileConfig{Fhr: fhr, VarLabel: "Wind", VarTag: "wind"},
+			UAProfileConfig{Fhr: fhr, VarLabel: "RHobT", VarTag: "rh"},
+		)
+	}
+	return configs
 }
 
-// FetchUpperAirProfiles retrieves vertical profile verification against RAOBs (1h, 3h, 6h, 12h).
+// FetchUpperAirProfiles retrieves vertical profile verification against RAOBs across lead hours.
 func (c *Client) FetchUpperAirProfiles(
 	ctx context.Context,
 	models []Model,
@@ -213,6 +212,7 @@ func (c *Client) FetchUpperAirProfiles(
 	colorMap map[string]string,
 	outDir string,
 	regions []string,
+	leads []string,
 	forceFetch bool,
 	onProgress func(current, total int, message string),
 ) error {
@@ -230,7 +230,8 @@ func (c *Client) FetchUpperAirProfiles(
 		return nil
 	}
 
-	totalSteps := len(regions) * len(UAProfileConfigs)
+	configs := BuildUAProfileConfigs(leads)
+	totalSteps := len(regions) * len(configs)
 	currentStep := 0
 
 	for _, reg := range regions {
@@ -243,7 +244,7 @@ func (c *Client) FetchUpperAirProfiles(
 			regLabel = "HRRR domain"
 		}
 
-		for _, cfg := range UAProfileConfigs {
+		for _, cfg := range configs {
 			currentStep++
 			fn := fmt.Sprintf("ua_prof_%sh_%s%s.png", cfg.Fhr, cfg.VarTag, regTag)
 			outPath := filepath.Join(outDir, fn)
@@ -369,6 +370,7 @@ func (c *Client) FetchUpperAirAMDAR(
 	uaDates string,
 	colorMap map[string]string,
 	outDir string,
+	leads []string,
 	forceFetch bool,
 	onProgress func(current, total int, message string),
 ) error {
@@ -390,19 +392,18 @@ func (c *Client) FetchUpperAirAMDAR(
 		{MATSLabel: "RH", Tag: "rh"},
 	}
 
-	amdarProfConfigs := []UAProfileConfig{
-		{Fhr: "1", VarLabel: "Temperature", VarTag: "temp"},
-		{Fhr: "1", VarLabel: "Wind", VarTag: "wind"},
-		{Fhr: "1", VarLabel: "RH", VarTag: "rh"},
-		{Fhr: "3", VarLabel: "Temperature", VarTag: "temp"},
-		{Fhr: "3", VarLabel: "Wind", VarTag: "wind"},
-		{Fhr: "3", VarLabel: "RH", VarTag: "rh"},
-		{Fhr: "6", VarLabel: "Temperature", VarTag: "temp"},
-		{Fhr: "6", VarLabel: "Wind", VarTag: "wind"},
-		{Fhr: "6", VarLabel: "RH", VarTag: "rh"},
-		{Fhr: "12", VarLabel: "Temperature", VarTag: "temp"},
-		{Fhr: "12", VarLabel: "Wind", VarTag: "wind"},
-		{Fhr: "12", VarLabel: "RH", VarTag: "rh"},
+	sortedLeads := SortLeadHours(leads)
+	if len(sortedLeads) == 0 {
+		sortedLeads = DefaultUpperAirLeads
+	}
+
+	var amdarProfConfigs []UAProfileConfig
+	for _, fhr := range sortedLeads {
+		amdarProfConfigs = append(amdarProfConfigs,
+			UAProfileConfig{Fhr: fhr, VarLabel: "Temperature", VarTag: "temp"},
+			UAProfileConfig{Fhr: fhr, VarLabel: "Wind", VarTag: "wind"},
+			UAProfileConfig{Fhr: fhr, VarLabel: "RH", VarTag: "rh"},
+		)
 	}
 
 	totalSteps := len(amdarDieoffVars) + len(amdarProfConfigs)

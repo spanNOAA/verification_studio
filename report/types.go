@@ -23,6 +23,10 @@ type Config struct {
 	ExtractedRefDir string          `json:"extracted_ref_dir,omitempty"`
 	SkipCref        bool            `json:"skip_cref"`
 	RadarCases      []hpc.RadarCase `json:"radar_cases"`
+	SfcLeads        []string        `json:"sfc_leads,omitempty"`
+	UaLeads         []string        `json:"ua_leads,omitempty"`
+	RadarLeads      []string        `json:"radar_leads,omitempty"`
+	CeilVisLeads    []string        `json:"ceilvis_leads,omitempty"`
 }
 
 // BulletItem represents a bullet point with emphasis on the title slide.

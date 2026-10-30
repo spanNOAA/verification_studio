@@ -34,6 +34,10 @@ type PipelineRequest struct {
 	IncludeCref  bool            `json:"include_cref"`
 	RadarCases   json.RawMessage `json:"radar_cases"`
 	Regions      []string        `json:"regions"`
+	SfcLeads     []string        `json:"sfc_leads"`
+	UaLeads      []string        `json:"ua_leads"`
+	RadarLeads   []string        `json:"radar_leads"`
+	CeilVisLeads []string        `json:"ceilvis_leads"`
 }
 
 var (
@@ -352,6 +356,10 @@ func main() {
 				ForceFetch:   req.ForceFetch,
 				IncludeCref:  req.IncludeCref,
 				RadarCases:   req.RadarCases,
+				SfcLeads:     req.SfcLeads,
+				UaLeads:      req.UaLeads,
+				RadarLeads:   req.RadarLeads,
+				CeilVisLeads: req.CeilVisLeads,
 			}
 
 			pipeErr := pipeline.Run(ctx, pipeReq, sendOutput)

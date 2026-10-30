@@ -20,38 +20,55 @@ type SurfaceTSConfig struct {
 	VarTag   string
 }
 
-// SurfaceTSConfigs lists all standard diurnal cycle forecast lengths and metrics.
-var SurfaceTSConfigs = []SurfaceTSConfig{
-	{Fhr: "1", Stat: "RMSE", StatTag: "rmse", VarLabel: "Temperature at 2m (°C)", VarTag: "t2m"},
-	{Fhr: "1", Stat: "RMSE", StatTag: "rmse", VarLabel: "Dewpoint at 2m (°C)", VarTag: "td2m"},
-	{Fhr: "1", Stat: "RMSE", StatTag: "rmse", VarLabel: "Wind Speed at 10m (m/s)", VarTag: "wind10m"},
-	{Fhr: "1", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Temperature at 2m (°C)", VarTag: "t2m"},
-	{Fhr: "1", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Dewpoint at 2m (°C)", VarTag: "td2m"},
-	{Fhr: "1", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Wind Speed at 10m (m/s)", VarTag: "wind10m"},
-
-	{Fhr: "3", Stat: "RMSE", StatTag: "rmse", VarLabel: "Temperature at 2m (°C)", VarTag: "t2m"},
-	{Fhr: "3", Stat: "RMSE", StatTag: "rmse", VarLabel: "Dewpoint at 2m (°C)", VarTag: "td2m"},
-	{Fhr: "3", Stat: "RMSE", StatTag: "rmse", VarLabel: "Wind Speed at 10m (m/s)", VarTag: "wind10m"},
-	{Fhr: "3", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Temperature at 2m (°C)", VarTag: "t2m"},
-	{Fhr: "3", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Dewpoint at 2m (°C)", VarTag: "td2m"},
-	{Fhr: "3", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Wind Speed at 10m (m/s)", VarTag: "wind10m"},
-
-	{Fhr: "12", Stat: "RMSE", StatTag: "rmse", VarLabel: "Temperature at 2m (°C)", VarTag: "t2m"},
-	{Fhr: "12", Stat: "RMSE", StatTag: "rmse", VarLabel: "Dewpoint at 2m (°C)", VarTag: "td2m"},
-	{Fhr: "12", Stat: "RMSE", StatTag: "rmse", VarLabel: "Wind Speed at 10m (m/s)", VarTag: "wind10m"},
-	{Fhr: "12", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Temperature at 2m (°C)", VarTag: "t2m"},
-	{Fhr: "12", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Dewpoint at 2m (°C)", VarTag: "td2m"},
-	{Fhr: "12", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Wind Speed at 10m (m/s)", VarTag: "wind10m"},
-
-	{Fhr: "24", Stat: "RMSE", StatTag: "rmse", VarLabel: "Temperature at 2m (°C)", VarTag: "t2m"},
-	{Fhr: "24", Stat: "RMSE", StatTag: "rmse", VarLabel: "Dewpoint at 2m (°C)", VarTag: "td2m"},
-	{Fhr: "24", Stat: "RMSE", StatTag: "rmse", VarLabel: "Wind Speed at 10m (m/s)", VarTag: "wind10m"},
-	{Fhr: "24", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Temperature at 2m (°C)", VarTag: "t2m"},
-	{Fhr: "24", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Dewpoint at 2m (°C)", VarTag: "td2m"},
-	{Fhr: "24", Stat: "Bias (Model - Obs)", StatTag: "bias", VarLabel: "Wind Speed at 10m (m/s)", VarTag: "wind10m"},
+// SurfaceTSVar defines an evaluated surface meteorological variable.
+type SurfaceTSVar struct {
+	VarLabel string
+	VarTag   string
 }
 
-// FetchSurfaceTimeSeries retrieves diurnal time series verification charts (1h, 3h, 12h, 24h) across regions.
+// SurfaceTSVars defines the standard surface meteorology variables for diurnal cycles.
+var SurfaceTSVars = []SurfaceTSVar{
+	{VarLabel: "Temperature at 2m (°C)", VarTag: "t2m"},
+	{VarLabel: "Dewpoint at 2m (°C)", VarTag: "td2m"},
+	{VarLabel: "Wind Speed at 10m (m/s)", VarTag: "wind10m"},
+}
+
+// SurfaceTSStat defines an evaluated statistical metric.
+type SurfaceTSStat struct {
+	Stat    string
+	StatTag string
+}
+
+// SurfaceTSStats defines standard time series statistical metrics.
+var SurfaceTSStats = []SurfaceTSStat{
+	{Stat: "RMSE", StatTag: "rmse"},
+	{Stat: "Bias (Model - Obs)", StatTag: "bias"},
+}
+
+// BuildSurfaceTSConfigs builds time series configurations for the requested forecast lead hours.
+func BuildSurfaceTSConfigs(leads []string) []SurfaceTSConfig {
+	sortedLeads := SortLeadHours(leads)
+	if len(sortedLeads) == 0 {
+		sortedLeads = DefaultSurfaceLeads
+	}
+	var configs []SurfaceTSConfig
+	for _, fhr := range sortedLeads {
+		for _, st := range SurfaceTSStats {
+			for _, v := range SurfaceTSVars {
+				configs = append(configs, SurfaceTSConfig{
+					Fhr:      fhr,
+					Stat:     st.Stat,
+					StatTag:  st.StatTag,
+					VarLabel: v.VarLabel,
+					VarTag:   v.VarTag,
+				})
+			}
+		}
+	}
+	return configs
+}
+
+// FetchSurfaceTimeSeries retrieves diurnal time series verification charts across regions and lead hours.
 func (c *Client) FetchSurfaceTimeSeries(
 	ctx context.Context,
 	models []Model,
@@ -59,6 +76,7 @@ func (c *Client) FetchSurfaceTimeSeries(
 	colorMap map[string]string,
 	outDir string,
 	regions []string,
+	leads []string,
 	forceFetch bool,
 	onProgress func(current, total int, message string),
 ) error {
@@ -76,7 +94,8 @@ func (c *Client) FetchSurfaceTimeSeries(
 		return nil
 	}
 
-	totalSteps := len(regions) * len(SurfaceTSConfigs)
+	configs := BuildSurfaceTSConfigs(leads)
+	totalSteps := len(regions) * len(configs)
 	currentStep := 0
 
 	for _, reg := range regions {
@@ -89,7 +108,7 @@ func (c *Client) FetchSurfaceTimeSeries(
 			regLabel = "All HRRR domain"
 		}
 
-		for _, cfg := range SurfaceTSConfigs {
+		for _, cfg := range configs {
 			currentStep++
 			fn := fmt.Sprintf("sfc_ts_%sh_%s_%s%s.png", cfg.Fhr, cfg.StatTag, cfg.VarTag, regTag)
 			outPath := filepath.Join(outDir, fn)

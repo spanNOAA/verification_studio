@@ -27,7 +27,7 @@ var radarThresholds = []thresholdSpec{
 	{MATSValue: "35 (reflectivity >= 35 dBZ)", Tag: "35dbz", Label: "35 dBZ"},
 }
 
-// FetchReflectivity retrieves radar composite reflectivity verification (Dieoff & 1h/3h TS for 15, 25, 35 dBZ).
+// FetchReflectivity retrieves radar composite reflectivity verification (Dieoff & TS across lead hours).
 func (c *Client) FetchReflectivity(
 	ctx context.Context,
 	models []Model,
@@ -35,6 +35,7 @@ func (c *Client) FetchReflectivity(
 	colorMap map[string]string,
 	outDir string,
 	regions []string,
+	leads []string,
 	forceFetch bool,
 	onProgress func(current, total int, message string),
 ) error {
@@ -54,8 +55,12 @@ func (c *Client) FetchReflectivity(
 		return nil
 	}
 
-	// For each region: 3 dieoff (CSI+Bias) + 2 fhr * 3 ts (CSI+Bias) = 18 charts per region
-	totalSteps := len(regions) * (len(radarThresholds)*2 + 2*len(radarThresholds)*2)
+	sortedLeads := SortLeadHours(leads)
+	if len(sortedLeads) == 0 {
+		sortedLeads = DefaultRadarLeads
+	}
+
+	totalSteps := len(regions) * (len(radarThresholds)*2 + len(sortedLeads)*len(radarThresholds)*2)
 	currentStep := 0
 
 	for _, reg := range regions {
@@ -109,8 +114,8 @@ func (c *Client) FetchReflectivity(
 			}
 		}
 
-		// 2. Time Series: 1h & 3h (CSI & Bias)
-		for _, fhr := range []string{"1", "3"} {
+		// 2. Time Series across requested leads (CSI & Bias)
+		for _, fhr := range sortedLeads {
 			for _, th := range radarThresholds {
 				// TS CSI
 				currentStep++
@@ -242,7 +247,7 @@ var ceilingThresholds = []thresholdSpec{
 	{MATSValue: "3000 (ceiling <3000 ft)", Tag: "3000ft", Label: "3000ft"},
 }
 
-// FetchCeiling retrieves cloud ceiling verification (Dieoff & 1h/3h TS for 500ft, 1000ft, 3000ft).
+// FetchCeiling retrieves cloud ceiling verification (Dieoff & TS across lead hours).
 func (c *Client) FetchCeiling(
 	ctx context.Context,
 	models []Model,
@@ -250,6 +255,7 @@ func (c *Client) FetchCeiling(
 	colorMap map[string]string,
 	outDir string,
 	regions []string,
+	leads []string,
 	forceFetch bool,
 	onProgress func(current, total int, message string),
 ) error {
@@ -269,7 +275,12 @@ func (c *Client) FetchCeiling(
 		return nil
 	}
 
-	totalSteps := len(regions) * (len(ceilingThresholds)*2 + 2*len(ceilingThresholds)*2)
+	sortedLeads := SortLeadHours(leads)
+	if len(sortedLeads) == 0 {
+		sortedLeads = DefaultCeilVisLeads
+	}
+
+	totalSteps := len(regions) * (len(ceilingThresholds)*2 + len(sortedLeads)*len(ceilingThresholds)*2)
 	currentStep := 0
 
 	for _, reg := range regions {
@@ -323,8 +334,8 @@ func (c *Client) FetchCeiling(
 			}
 		}
 
-		// 2. Time Series: 1h & 3h (CSI & Bias)
-		for _, fhr := range []string{"1", "3"} {
+		// 2. Time Series across requested leads (CSI & Bias)
+		for _, fhr := range sortedLeads {
 			for _, th := range ceilingThresholds {
 				// TS CSI
 				currentStep++
@@ -380,7 +391,7 @@ var visThresholds = []thresholdSpec{
 	{MATSValue: "5 (visibility < 5 mi)", Tag: "5mi", Label: "5mi"},
 }
 
-// FetchVisibility retrieves visibility verification (Dieoff & 1h/3h TS for 1mi, 3mi, 5mi).
+// FetchVisibility retrieves visibility verification (Dieoff & TS across lead hours).
 func (c *Client) FetchVisibility(
 	ctx context.Context,
 	models []Model,
@@ -388,6 +399,7 @@ func (c *Client) FetchVisibility(
 	colorMap map[string]string,
 	outDir string,
 	regions []string,
+	leads []string,
 	forceFetch bool,
 	onProgress func(current, total int, message string),
 ) error {
@@ -407,7 +419,12 @@ func (c *Client) FetchVisibility(
 		return nil
 	}
 
-	totalSteps := len(regions) * (len(visThresholds)*2 + 2*len(visThresholds)*2)
+	sortedLeads := SortLeadHours(leads)
+	if len(sortedLeads) == 0 {
+		sortedLeads = DefaultCeilVisLeads
+	}
+
+	totalSteps := len(regions) * (len(visThresholds)*2 + len(sortedLeads)*len(visThresholds)*2)
 	currentStep := 0
 
 	for _, reg := range regions {
@@ -461,8 +478,8 @@ func (c *Client) FetchVisibility(
 			}
 		}
 
-		// 2. Time Series: 1h & 3h (CSI & Bias)
-		for _, fhr := range []string{"1", "3"} {
+		// 2. Time Series across requested leads (CSI & Bias)
+		for _, fhr := range sortedLeads {
 			for _, th := range visThresholds {
 				// TS CSI
 				currentStep++

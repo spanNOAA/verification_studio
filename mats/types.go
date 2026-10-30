@@ -1,5 +1,11 @@
 package mats
 
+import (
+	"sort"
+	"strconv"
+	"strings"
+)
+
 // Model represents an evaluated NWP forecast model experiment.
 type Model struct {
 	ID      string `json:"id"`
@@ -61,4 +67,45 @@ type CheckOptions struct {
 	Category string
 	Variable string
 	Database string
+}
+
+// Default baseline forecast leads for each meteorological element.
+var (
+	DefaultSurfaceLeads  = []string{"1", "3", "12", "24"}
+	DefaultUpperAirLeads = []string{"1", "3", "6", "12"}
+	DefaultRadarLeads    = []string{"1", "3"}
+	DefaultCeilVisLeads  = []string{"1", "3"}
+)
+
+// SortLeadHours cleans, deduplicates, and sorts forecast lead strings in ascending numerical order.
+func SortLeadHours(leads []string) []string {
+	if len(leads) == 0 {
+		return nil
+	}
+	type item struct {
+		val int
+		raw string
+	}
+	var items []item
+	seen := make(map[string]bool)
+	for _, l := range leads {
+		trimmed := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(l), "h"))
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		n, err := strconv.Atoi(trimmed)
+		if err != nil {
+			continue
+		}
+		items = append(items, item{val: n, raw: strconv.Itoa(n)})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].val < items[j].val
+	})
+	res := make([]string, len(items))
+	for i, it := range items {
+		res[i] = it.raw
+	}
+	return res
 }
