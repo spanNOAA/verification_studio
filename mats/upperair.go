@@ -191,7 +191,7 @@ type UAProfileConfig struct {
 func BuildUAProfileConfigs(leads []string) []UAProfileConfig {
 	sortedLeads := SortLeadHours(leads)
 	if len(sortedLeads) == 0 {
-		sortedLeads = DefaultUpperAirLeads
+		return nil
 	}
 	var configs []UAProfileConfig
 	for _, fhr := range sortedLeads {
@@ -231,6 +231,10 @@ func (c *Client) FetchUpperAirProfiles(
 	}
 
 	configs := BuildUAProfileConfigs(leads)
+	if len(configs) == 0 {
+		c.Log("  [UPPER AIR PROFILE NOTICE] No forecast lead hours selected. Skipping Upper Air Profiles.\n")
+		return nil
+	}
 	totalSteps := len(regions) * len(configs)
 	currentStep := 0
 
@@ -393,10 +397,6 @@ func (c *Client) FetchUpperAirAMDAR(
 	}
 
 	sortedLeads := SortLeadHours(leads)
-	if len(sortedLeads) == 0 {
-		sortedLeads = DefaultUpperAirLeads
-	}
-
 	var amdarProfConfigs []UAProfileConfig
 	for _, fhr := range sortedLeads {
 		amdarProfConfigs = append(amdarProfConfigs,

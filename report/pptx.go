@@ -472,22 +472,10 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 			false, "COMBINED", reg,
 		)
 
-		sfcLeads := mats.SortLeadHours(cfg.SfcLeads)
-		if len(sfcLeads) == 0 {
-			sfcLeads = mats.DefaultSurfaceLeads
-		}
-		uaLeads := mats.SortLeadHours(cfg.UaLeads)
-		if len(uaLeads) == 0 {
-			uaLeads = mats.DefaultUpperAirLeads
-		}
-		radarLeads := mats.SortLeadHours(cfg.RadarLeads)
-		if len(radarLeads) == 0 {
-			radarLeads = mats.DefaultRadarLeads
-		}
-		ceilvisLeads := mats.SortLeadHours(cfg.CeilVisLeads)
-		if len(ceilvisLeads) == 0 {
-			ceilvisLeads = mats.DefaultCeilVisLeads
-		}
+		sfcLeads := mats.ResolveLeadHours(cfg.SfcLeads, mats.DefaultSurfaceLeads)
+		uaLeads := mats.ResolveLeadHours(cfg.UaLeads, mats.DefaultUpperAirLeads)
+		radarLeads := mats.ResolveLeadHours(cfg.RadarLeads, mats.DefaultRadarLeads)
+		ceilvisLeads := mats.ResolveLeadHours(cfg.CeilVisLeads, mats.DefaultCeilVisLeads)
 
 		// 2. Surface Time Series
 		for _, fhr := range sfcLeads {

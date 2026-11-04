@@ -49,7 +49,7 @@ var SurfaceTSStats = []SurfaceTSStat{
 func BuildSurfaceTSConfigs(leads []string) []SurfaceTSConfig {
 	sortedLeads := SortLeadHours(leads)
 	if len(sortedLeads) == 0 {
-		sortedLeads = DefaultSurfaceLeads
+		return nil
 	}
 	var configs []SurfaceTSConfig
 	for _, fhr := range sortedLeads {
@@ -95,6 +95,10 @@ func (c *Client) FetchSurfaceTimeSeries(
 	}
 
 	configs := BuildSurfaceTSConfigs(leads)
+	if len(configs) == 0 {
+		c.Log("  [SURFACE TS NOTICE] No forecast lead hours selected. Skipping Surface Time Series.\n")
+		return nil
+	}
 	totalSteps := len(regions) * len(configs)
 	currentStep := 0
 

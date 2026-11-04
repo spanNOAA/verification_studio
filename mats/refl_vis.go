@@ -56,9 +56,6 @@ func (c *Client) FetchReflectivity(
 	}
 
 	sortedLeads := SortLeadHours(leads)
-	if len(sortedLeads) == 0 {
-		sortedLeads = DefaultRadarLeads
-	}
 
 	totalSteps := len(regions) * (len(radarThresholds)*2 + len(sortedLeads)*len(radarThresholds)*2)
 	currentStep := 0
@@ -276,9 +273,6 @@ func (c *Client) FetchCeiling(
 	}
 
 	sortedLeads := SortLeadHours(leads)
-	if len(sortedLeads) == 0 {
-		sortedLeads = DefaultCeilVisLeads
-	}
 
 	totalSteps := len(regions) * (len(ceilingThresholds)*2 + len(sortedLeads)*len(ceilingThresholds)*2)
 	currentStep := 0
@@ -420,9 +414,6 @@ func (c *Client) FetchVisibility(
 	}
 
 	sortedLeads := SortLeadHours(leads)
-	if len(sortedLeads) == 0 {
-		sortedLeads = DefaultCeilVisLeads
-	}
 
 	totalSteps := len(regions) * (len(visThresholds)*2 + len(sortedLeads)*len(visThresholds)*2)
 	currentStep := 0

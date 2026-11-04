@@ -226,21 +226,16 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		ceilvisDates = req.SfcDates
 	}
 
-	sfcLeads := mats.SortLeadHours(req.SfcLeads)
-	if len(sfcLeads) == 0 {
-		sfcLeads = mats.DefaultSurfaceLeads
-	}
-	uaLeads := mats.SortLeadHours(req.UaLeads)
-	if len(uaLeads) == 0 {
-		uaLeads = mats.DefaultUpperAirLeads
-	}
-	radarLeads := mats.SortLeadHours(req.RadarLeads)
-	if len(radarLeads) == 0 {
-		radarLeads = mats.DefaultRadarLeads
-	}
-	ceilvisLeads := mats.SortLeadHours(req.CeilVisLeads)
-	if len(ceilvisLeads) == 0 {
-		ceilvisLeads = mats.DefaultCeilVisLeads
+	sfcLeads := mats.ResolveLeadHours(req.SfcLeads, mats.DefaultSurfaceLeads)
+	uaLeads := mats.ResolveLeadHours(req.UaLeads, mats.DefaultUpperAirLeads)
+	radarLeads := mats.ResolveLeadHours(req.RadarLeads, mats.DefaultRadarLeads)
+	ceilvisLeads := mats.ResolveLeadHours(req.CeilVisLeads, mats.DefaultCeilVisLeads)
+
+	formatLeads := func(leads []string) string {
+		if len(leads) == 0 {
+			return "Skipped"
+		}
+		return fmt.Sprintf("%v", leads)
 	}
 
 	log("\n==================================================================\n")
@@ -249,7 +244,8 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 	log(" Output  : %s\n", req.OutputDir)
 	log(" Report  : %s (.pptx / .html)\n", req.ReportName)
 	log(" Periods : Surface [%s] | Upper-Air [%s] | Radar [%s] | Ceil/Vis [%s]\n", req.SfcDates, req.UaDates, radarDates, ceilvisDates)
-	log(" Leads   : Sfc %v | Upper-Air %v | Radar %v | Ceil/Vis %v\n", sfcLeads, uaLeads, radarLeads, ceilvisLeads)
+	log(" Leads   : Sfc %s | Upper-Air %s | Radar %s | Ceil/Vis %s\n",
+		formatLeads(sfcLeads), formatLeads(uaLeads), formatLeads(radarLeads), formatLeads(ceilvisLeads))
 	log("==================================================================\n\n")
 
 	models := ParseModels(req.ModelsText)
@@ -325,7 +321,13 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 	// + 10. MRMS Radar Observations (if cases)
 	// + 11. Presentation Reports (PPTX + HTML)
 
-	totalStages := 9
+	totalStages := 7
+	if len(sfcLeads) > 0 {
+		totalStages++
+	}
+	if len(uaLeads) > 0 {
+		totalStages++
+	}
 	if hasRadarCases {
 		totalStages += 2
 	}
@@ -398,16 +400,20 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		}
 
 		// Surface Time Series
-		isolateBrowser("Surface Time Series")
-		stageIdx++
-		log("\n>>> [%d/%d] Fetching Surface Time Series (%s)...\n", stageIdx, totalStages, strings.Join(sfcLeads, "h, ")+"h")
-		reportProgress(stageIdx, 0, "Surface Time Series")
-		err = matsClient.FetchSurfaceTimeSeries(ctx, models, req.SfcDates, colorMap, matsDir, regions, sfcLeads, req.ForceFetch, func(curr, total int, msg string) {
-			pct := int(float64(curr) / float64(total) * 100.0)
-			reportProgress(stageIdx, pct, msg)
-		})
-		if err != nil {
-			log("  [SURFACE TS ERROR] %v\n", err)
+		if len(sfcLeads) > 0 {
+			isolateBrowser("Surface Time Series")
+			stageIdx++
+			log("\n>>> [%d/%d] Fetching Surface Time Series (%s)...\n", stageIdx, totalStages, strings.Join(sfcLeads, "h, ")+"h")
+			reportProgress(stageIdx, 0, "Surface Time Series")
+			err = matsClient.FetchSurfaceTimeSeries(ctx, models, req.SfcDates, colorMap, matsDir, regions, sfcLeads, req.ForceFetch, func(curr, total int, msg string) {
+				pct := int(float64(curr) / float64(total) * 100.0)
+				reportProgress(stageIdx, pct, msg)
+			})
+			if err != nil {
+				log("  [SURFACE TS ERROR] %v\n", err)
+			}
+		} else {
+			log("\n>>> Surface Time Series skipped (0 lead hours selected).\n")
 		}
 
 		// Upper Air Dieoff against RAOBs
@@ -424,22 +430,30 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		}
 
 		// Upper Air Profiles
-		isolateBrowser("Upper Air Profiles")
-		stageIdx++
-		log("\n>>> [%d/%d] Fetching Upper Air Profiles (%s)...\n", stageIdx, totalStages, strings.Join(uaLeads, "h, ")+"h")
-		reportProgress(stageIdx, 0, "Upper Air Profiles")
-		err = matsClient.FetchUpperAirProfiles(ctx, models, req.UaDates, colorMap, matsDir, regions, uaLeads, req.ForceFetch, func(curr, total int, msg string) {
-			pct := int(float64(curr) / float64(total) * 100.0)
-			reportProgress(stageIdx, pct, msg)
-		})
-		if err != nil {
-			log("  [UPPER AIR PROFILE ERROR] %v\n", err)
+		if len(uaLeads) > 0 {
+			isolateBrowser("Upper Air Profiles")
+			stageIdx++
+			log("\n>>> [%d/%d] Fetching Upper Air Profiles (%s)...\n", stageIdx, totalStages, strings.Join(uaLeads, "h, ")+"h")
+			reportProgress(stageIdx, 0, "Upper Air Profiles")
+			err = matsClient.FetchUpperAirProfiles(ctx, models, req.UaDates, colorMap, matsDir, regions, uaLeads, req.ForceFetch, func(curr, total int, msg string) {
+				pct := int(float64(curr) / float64(total) * 100.0)
+				reportProgress(stageIdx, pct, msg)
+			})
+			if err != nil {
+				log("  [UPPER AIR PROFILE ERROR] %v\n", err)
+			}
+		} else {
+			log("\n>>> Upper Air Profiles skipped (0 lead hours selected).\n")
 		}
 
 		// Upper Air AMDAR
 		isolateBrowser("Upper Air AMDAR")
 		stageIdx++
-		log("\n>>> [%d/%d] Checking Upper Air AMDAR Verification...\n", stageIdx, totalStages)
+		amdarTitle := "Upper Air AMDAR (Dieoff only)"
+		if len(uaLeads) > 0 {
+			amdarTitle = fmt.Sprintf("Upper Air AMDAR (Dieoff + Profiles %s)", strings.Join(uaLeads, "h, ")+"h")
+		}
+		log("\n>>> [%d/%d] Checking %s...\n", stageIdx, totalStages, amdarTitle)
 		reportProgress(stageIdx, 0, "Upper Air AMDAR")
 		err = matsClient.FetchUpperAirAMDAR(ctx, models, req.UaDates, colorMap, matsDir, uaLeads, req.ForceFetch, func(curr, total int, msg string) {
 			pct := int(float64(curr) / float64(total) * 100.0)
@@ -452,7 +466,11 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		// Radar Composite Reflectivity
 		isolateBrowser("Radar Reflectivity")
 		stageIdx++
-		log("\n>>> [%d/%d] Fetching Radar Composite Reflectivity (TS: %s)...\n", stageIdx, totalStages, strings.Join(radarLeads, "h, ")+"h")
+		radarTitle := "Radar Reflectivity (Dieoff only)"
+		if len(radarLeads) > 0 {
+			radarTitle = fmt.Sprintf("Radar Reflectivity (Dieoff + TS: %s)", strings.Join(radarLeads, "h, ")+"h")
+		}
+		log("\n>>> [%d/%d] Fetching %s...\n", stageIdx, totalStages, radarTitle)
 		reportProgress(stageIdx, 0, "Radar Reflectivity")
 		err = matsClient.FetchReflectivity(ctx, models, radarDates, colorMap, matsDir, regions, radarLeads, req.ForceFetch, func(curr, total int, msg string) {
 			pct := int(float64(curr) / float64(total) * 100.0)
@@ -465,7 +483,11 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		// Cloud Ceiling
 		isolateBrowser("Cloud Ceiling")
 		stageIdx++
-		log("\n>>> [%d/%d] Fetching Cloud Ceiling Verification (TS: %s)...\n", stageIdx, totalStages, strings.Join(ceilvisLeads, "h, ")+"h")
+		ceilTitle := "Cloud Ceiling (Dieoff only)"
+		if len(ceilvisLeads) > 0 {
+			ceilTitle = fmt.Sprintf("Cloud Ceiling (Dieoff + TS: %s)", strings.Join(ceilvisLeads, "h, ")+"h")
+		}
+		log("\n>>> [%d/%d] Fetching %s...\n", stageIdx, totalStages, ceilTitle)
 		reportProgress(stageIdx, 0, "Cloud Ceiling")
 		err = matsClient.FetchCeiling(ctx, models, ceilvisDates, colorMap, matsDir, regions, ceilvisLeads, req.ForceFetch, func(curr, total int, msg string) {
 			pct := int(float64(curr) / float64(total) * 100.0)
@@ -478,7 +500,11 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		// Visibility
 		isolateBrowser("Visibility")
 		stageIdx++
-		log("\n>>> [%d/%d] Fetching Surface Visibility Verification (TS: %s)...\n", stageIdx, totalStages, strings.Join(ceilvisLeads, "h, ")+"h")
+		visTitle := "Visibility (Dieoff only)"
+		if len(ceilvisLeads) > 0 {
+			visTitle = fmt.Sprintf("Visibility (Dieoff + TS: %s)", strings.Join(ceilvisLeads, "h, ")+"h")
+		}
+		log("\n>>> [%d/%d] Fetching %s...\n", stageIdx, totalStages, visTitle)
 		reportProgress(stageIdx, 0, "Visibility")
 		err = matsClient.FetchVisibility(ctx, models, ceilvisDates, colorMap, matsDir, regions, ceilvisLeads, req.ForceFetch, func(curr, total int, msg string) {
 			pct := int(float64(curr) / float64(total) * 100.0)

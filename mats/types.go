@@ -109,3 +109,20 @@ func SortLeadHours(leads []string) []string {
 	}
 	return res
 }
+
+// ResolveLeadHours resolves lead hours against defaults.
+// If configured is nil, it falls back to defaults.
+// If configured is explicitly provided as empty ([]string{}), it returns empty slice indicating the component is skipped.
+func ResolveLeadHours(configured []string, defaults []string) []string {
+	if configured == nil {
+		return defaults
+	}
+	if len(configured) == 0 {
+		return []string{}
+	}
+	sorted := SortLeadHours(configured)
+	if sorted == nil {
+		return []string{}
+	}
+	return sorted
+}

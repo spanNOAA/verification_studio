@@ -2038,7 +2038,11 @@
 
       const countEl = document.getElementById(`count-${modKey}`);
       if (countEl) {
-        countEl.innerText = fhrState[modKey].size;
+        if (fhrState[modKey].size === 0) {
+          countEl.innerHTML = '<span style="color:#ef4444; font-weight:600;">0 (Skipped)</span>';
+        } else {
+          countEl.innerText = `${fhrState[modKey].size} lead${fhrState[modKey].size > 1 ? 's' : ''}`;
+        }
       }
     }
 
@@ -2185,10 +2189,6 @@
       if (!uaStart || !uaEnd) { alert('Please select a valid Upper Air Verification Period (From & To)!'); return; }
       if (!radarStart || !radarEnd) { alert('Please select a valid Radar Verification Period (From & To)!'); return; }
       if (!ceilvisStart || !ceilvisEnd) { alert('Please select a valid Ceiling & Visibility Period (From & To)!'); return; }
-      if (sfcLeads.length === 0) { alert('Please select at least one lead hour for Surface Time Series, or click Default.'); return; }
-      if (uaLeads.length === 0) { alert('Please select at least one lead hour for Upper Air Profiles, or click Default.'); return; }
-      if (radarLeads.length === 0) { alert('Please select at least one lead hour for Radar Reflectivity, or click Default.'); return; }
-      if (ceilvisLeads.length === 0) { alert('Please select at least one lead hour for Ceiling & Visibility, or click Default.'); return; }
 
       const btn = document.getElementById('btnStart');
       btn.disabled = true;
