@@ -25,6 +25,7 @@ type Config struct {
 	RadarCases      []hpc.RadarCase `json:"radar_cases"`
 	SfcLeads        []string        `json:"sfc_leads,omitempty"`
 	UaLeads         []string        `json:"ua_leads,omitempty"`
+	UaTSLeads       []string        `json:"ua_ts_leads,omitempty"`
 	RadarLeads      []string        `json:"radar_leads,omitempty"`
 	CeilVisLeads    []string        `json:"ceilvis_leads,omitempty"`
 }

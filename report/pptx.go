@@ -474,6 +474,7 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 
 		sfcLeads := mats.ResolveLeadHours(cfg.SfcLeads, mats.DefaultSurfaceLeads)
 		uaLeads := mats.ResolveLeadHours(cfg.UaLeads, mats.DefaultUpperAirLeads)
+		uaTSLeads := mats.ResolveLeadHours(cfg.UaTSLeads, mats.DefaultUpperAirTSLeads)
 		radarLeads := mats.ResolveLeadHours(cfg.RadarLeads, mats.DefaultRadarLeads)
 		ceilvisLeads := mats.ResolveLeadHours(cfg.CeilVisLeads, mats.DefaultCeilVisLeads)
 
@@ -543,7 +544,25 @@ func BuildPresentation(cfg Config, matsDir, outputPptx string) ([]SlideData, err
 			}
 		}
 
-		// 5. Radar Reflectivity
+		// 5. Upper Air RAOBs Time Series
+		for _, fhr := range uaTSLeads {
+			leadTitle := fmt.Sprintf("%s-h fcst", fhr)
+			if fhr == "0" {
+				leadTitle = "Analysis"
+			}
+			flead := fhr + "h"
+			addIntegratedTSSlide(
+				fmt.Sprintf("Upper air %s time series%s", leadTitle, regSuffix), "RMSE", "BIAS",
+				[][3]string{
+					{"Temperature", fmt.Sprintf("ua_ts_%s_rmse_temp%s.png", flead, regTag), fmt.Sprintf("ua_ts_%s_bias_temp%s.png", flead, regTag)},
+					{"Wind", fmt.Sprintf("ua_ts_%s_rmse_wind%s.png", flead, regTag), fmt.Sprintf("ua_ts_%s_bias_wind%s.png", flead, regTag)},
+					{"RHobT", fmt.Sprintf("ua_ts_%s_rmse_rh%s.png", flead, regTag), fmt.Sprintf("ua_ts_%s_bias_rh%s.png", flead, regTag)},
+				},
+				reg,
+			)
+		}
+
+		// 6. Radar Reflectivity
 		add3PanelSlide(fmt.Sprintf("CREF Dieoff (CSI )%s", regSuffix), fmt.Sprintf("ref_dieoff_csi_15dbz%s.png", regTag), fmt.Sprintf("ref_dieoff_csi_25dbz%s.png", regTag), fmt.Sprintf("ref_dieoff_csi_35dbz%s.png", regTag), "15 dBZ", "25 dBZ", "35 dBZ", false, "CSI", reg)
 		add3PanelSlide(fmt.Sprintf("CREF Dieoff (BIAS )%s", regSuffix), fmt.Sprintf("ref_dieoff_bias_15dbz%s.png", regTag), fmt.Sprintf("ref_dieoff_bias_25dbz%s.png", regTag), fmt.Sprintf("ref_dieoff_bias_35dbz%s.png", regTag), "15 dBZ", "25 dBZ", "35 dBZ", true, "BIAS", reg)
 		for _, fhr := range radarLeads {

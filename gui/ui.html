@@ -997,7 +997,7 @@
                       <span class="fhr-sub-info">(T2m, Td2m, Wind 10m • RMSE & Bias)</span>
                     </div>
                     <div class="fhr-controls">
-                      <span class="fhr-counter">Selected: <strong id="count-sfc" style="color:#2563eb;">4</strong> leads</span>
+                      <span class="fhr-counter">Selected: <strong id="count-sfc" style="color:#2563eb;">4 leads</strong></span>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroup('sfc', ['1','3','12','24'])">Default</button>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('sfc', true)">All</button>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('sfc', false)">Clear</button>
@@ -1015,7 +1015,7 @@
                       <span class="fhr-sub-info">(RAOBs & AMDAR • Temp, Wind, RH Profiles)</span>
                     </div>
                     <div class="fhr-controls">
-                      <span class="fhr-counter">Selected: <strong id="count-ua" style="color:#2563eb;">4</strong> leads</span>
+                      <span class="fhr-counter">Selected: <strong id="count-ua" style="color:#2563eb;">4 leads</strong></span>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroup('ua', ['1','3','6','12'])">Default</button>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('ua', true)">All</button>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('ua', false)">Clear</button>
@@ -1024,7 +1024,25 @@
                   <div id="pills-ua" class="fhr-chips-container"></div>
                 </div>
 
-                <!-- Module 3: Radar Reflectivity Time Series -->
+                <!-- Module 3: Upper Air Time Series -->
+                <div class="fhr-module-box">
+                  <div class="fhr-module-header">
+                    <div class="fhr-module-title">
+                      <span class="fhr-icon" style="background:#dbeafe; color:#1d4ed8;">📈</span>
+                      <span style="font-size:12px; font-weight:700; color:#1e293b;">Upper Air Time Series</span>
+                      <span class="fhr-sub-info">(RAOBs Column 1000-1 hPa • Temp, Wind, RHobT • RMSE & Bias)</span>
+                    </div>
+                    <div class="fhr-controls">
+                      <span class="fhr-counter">Selected: <strong id="count-ua_ts" style="color:#2563eb;">4 leads</strong></span>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroup('ua_ts', ['1','3','6','12'])">Default</button>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('ua_ts', true)">All</button>
+                      <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('ua_ts', false)">Clear</button>
+                    </div>
+                  </div>
+                  <div id="pills-ua_ts" class="fhr-chips-container"></div>
+                </div>
+
+                <!-- Module 4: Radar Reflectivity Time Series -->
                 <div class="fhr-module-box">
                   <div class="fhr-module-header">
                     <div class="fhr-module-title">
@@ -1033,7 +1051,7 @@
                       <span class="fhr-sub-info">(CREF 15, 25, 35 dBZ • CSI & Bias • Max 42h)</span>
                     </div>
                     <div class="fhr-controls">
-                      <span class="fhr-counter">Selected: <strong id="count-radar" style="color:#2563eb;">2</strong> leads</span>
+                      <span class="fhr-counter">Selected: <strong id="count-radar" style="color:#2563eb;">2 leads</strong></span>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroup('radar', ['1','3'])">Default</button>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('radar', true)">All</button>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('radar', false)">Clear</button>
@@ -1042,7 +1060,7 @@
                   <div id="pills-radar" class="fhr-chips-container"></div>
                 </div>
 
-                <!-- Module 4: Cloud Ceiling & Visibility Time Series -->
+                <!-- Module 5: Cloud Ceiling & Visibility Time Series -->
                 <div class="fhr-module-box">
                   <div class="fhr-module-header">
                     <div class="fhr-module-title">
@@ -1051,7 +1069,7 @@
                       <span class="fhr-sub-info">(Ceiling & Visibility Thresholds • CSI & Bias • Max 48h)</span>
                     </div>
                     <div class="fhr-controls">
-                      <span class="fhr-counter">Selected: <strong id="count-ceilvis" style="color:#2563eb;">2</strong> leads</span>
+                      <span class="fhr-counter">Selected: <strong id="count-ceilvis" style="color:#2563eb;">2 leads</strong></span>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroup('ceilvis', ['1','3'])">Default</button>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('ceilvis', true)">All</button>
                       <button type="button" class="fhr-btn-action" onclick="setFhrGroupAll('ceilvis', false)">Clear</button>
@@ -1991,6 +2009,10 @@
         all: ['0','1','2','3','6','9','12','15','18','24','30','36','42','48'],
         defaults: ['1','3','6','12']
       },
+      ua_ts: {
+        all: ['0','1','2','3','6','9','12','15','18','24','30','36','42','48'],
+        defaults: ['1','3','6','12']
+      },
       radar: {
         all: ['1','2','3','4','5','6','9','12','15','18','21','24','30','36','42'],
         defaults: ['1','3']
@@ -2004,6 +2026,7 @@
     const fhrState = {
       sfc: new Set(FHR_MODULES.sfc.defaults),
       ua: new Set(FHR_MODULES.ua.defaults),
+      ua_ts: new Set(FHR_MODULES.ua_ts.defaults),
       radar: new Set(FHR_MODULES.radar.defaults),
       ceilvis: new Set(FHR_MODULES.ceilvis.defaults),
     };
@@ -2061,7 +2084,7 @@
     }
 
     function resetAllFhrDefaults() {
-      for (const k of ['sfc', 'ua', 'radar', 'ceilvis']) {
+      for (const k of ['sfc', 'ua', 'ua_ts', 'radar', 'ceilvis']) {
         fhrState[k] = new Set(FHR_MODULES[k].defaults);
         renderFhrPills(k);
       }
@@ -2072,7 +2095,7 @@
       onCrefDateTimeChanged();
       renderRadarCasesList();
       updateModelBadge();
-      ['sfc', 'ua', 'radar', 'ceilvis'].forEach(renderFhrPills);
+      ['sfc', 'ua', 'ua_ts', 'radar', 'ceilvis'].forEach(renderFhrPills);
     }, 50);
 
     let pipelineStartTime = null;
@@ -2180,6 +2203,7 @@
       const sortLeads = arr => arr.slice().sort((a,b) => parseInt(a, 10) - parseInt(b, 10));
       const sfcLeads = sortLeads(Array.from(fhrState.sfc));
       const uaLeads = sortLeads(Array.from(fhrState.ua));
+      const uaTSLeads = sortLeads(Array.from(fhrState.ua_ts));
       const radarLeads = sortLeads(Array.from(fhrState.radar));
       const ceilvisLeads = sortLeads(Array.from(fhrState.ceilvis));
 
@@ -2215,6 +2239,7 @@
         regions: regions,
         sfc_leads: sfcLeads,
         ua_leads: uaLeads,
+        ua_ts_leads: uaTSLeads,
         radar_leads: radarLeads,
         ceilvis_leads: ceilvisLeads
       });

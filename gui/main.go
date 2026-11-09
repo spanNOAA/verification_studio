@@ -36,6 +36,7 @@ type PipelineRequest struct {
 	Regions      []string        `json:"regions"`
 	SfcLeads     []string        `json:"sfc_leads"`
 	UaLeads      []string        `json:"ua_leads"`
+	UaTSLeads    []string        `json:"ua_ts_leads"`
 	RadarLeads   []string        `json:"radar_leads"`
 	CeilVisLeads []string        `json:"ceilvis_leads"`
 }
@@ -358,6 +359,7 @@ func main() {
 				RadarCases:   req.RadarCases,
 				SfcLeads:     req.SfcLeads,
 				UaLeads:      req.UaLeads,
+				UaTSLeads:    req.UaTSLeads,
 				RadarLeads:   req.RadarLeads,
 				CeilVisLeads: req.CeilVisLeads,
 			}

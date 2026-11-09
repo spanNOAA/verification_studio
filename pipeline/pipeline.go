@@ -35,6 +35,7 @@ type Request struct {
 	RadarCases   json.RawMessage `json:"radar_cases"`
 	SfcLeads     []string        `json:"sfc_leads"`
 	UaLeads      []string        `json:"ua_leads"`
+	UaTSLeads    []string        `json:"ua_ts_leads"`
 	RadarLeads   []string        `json:"radar_leads"`
 	CeilVisLeads []string        `json:"ceilvis_leads"`
 }
@@ -228,6 +229,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 
 	sfcLeads := mats.ResolveLeadHours(req.SfcLeads, mats.DefaultSurfaceLeads)
 	uaLeads := mats.ResolveLeadHours(req.UaLeads, mats.DefaultUpperAirLeads)
+	uaTSLeads := mats.ResolveLeadHours(req.UaTSLeads, mats.DefaultUpperAirTSLeads)
 	radarLeads := mats.ResolveLeadHours(req.RadarLeads, mats.DefaultRadarLeads)
 	ceilvisLeads := mats.ResolveLeadHours(req.CeilVisLeads, mats.DefaultCeilVisLeads)
 
@@ -244,8 +246,8 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 	log(" Output  : %s\n", req.OutputDir)
 	log(" Report  : %s (.pptx / .html)\n", req.ReportName)
 	log(" Periods : Surface [%s] | Upper-Air [%s] | Radar [%s] | Ceil/Vis [%s]\n", req.SfcDates, req.UaDates, radarDates, ceilvisDates)
-	log(" Leads   : Sfc %s | Upper-Air %s | Radar %s | Ceil/Vis %s\n",
-		formatLeads(sfcLeads), formatLeads(uaLeads), formatLeads(radarLeads), formatLeads(ceilvisLeads))
+	log(" Leads   : Sfc %s | UA Prof %s | UA TS %s | Radar %s | Ceil/Vis %s\n",
+		formatLeads(sfcLeads), formatLeads(uaLeads), formatLeads(uaTSLeads), formatLeads(radarLeads), formatLeads(ceilvisLeads))
 	log("==================================================================\n\n")
 
 	models := ParseModels(req.ModelsText)
@@ -326,6 +328,9 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		totalStages++
 	}
 	if len(uaLeads) > 0 {
+		totalStages++
+	}
+	if len(uaTSLeads) > 0 {
 		totalStages++
 	}
 	if hasRadarCases {
@@ -463,6 +468,23 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 			log("  [AMDAR ERROR] %v\n", err)
 		}
 
+		// Upper Air Time Series
+		if len(uaTSLeads) > 0 {
+			isolateBrowser("Upper Air Time Series")
+			stageIdx++
+			log("\n>>> [%d/%d] Fetching Upper Air Time Series (%s)...\n", stageIdx, totalStages, strings.Join(uaTSLeads, "h, ")+"h")
+			reportProgress(stageIdx, 0, "Upper Air Time Series")
+			err = matsClient.FetchUpperAirTimeSeries(ctx, models, req.UaDates, colorMap, matsDir, regions, uaTSLeads, req.ForceFetch, func(curr, total int, msg string) {
+				pct := int(float64(curr) / float64(total) * 100.0)
+				reportProgress(stageIdx, pct, msg)
+			})
+			if err != nil {
+				log("  [UPPER AIR TS ERROR] %v\n", err)
+			}
+		} else {
+			log("\n>>> Upper Air Time Series skipped (0 lead hours selected).\n")
+		}
+
 		// Radar Composite Reflectivity
 		isolateBrowser("Radar Reflectivity")
 		stageIdx++
@@ -540,6 +562,7 @@ func Run(ctx context.Context, req Request, logFn func(string)) error {
 		RadarCases:   radarCases,
 		SfcLeads:     sfcLeads,
 		UaLeads:      uaLeads,
+		UaTSLeads:    uaTSLeads,
 		RadarLeads:   radarLeads,
 		CeilVisLeads: ceilvisLeads,
 	}

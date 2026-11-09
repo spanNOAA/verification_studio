@@ -71,10 +71,11 @@ type CheckOptions struct {
 
 // Default baseline forecast leads for each meteorological element.
 var (
-	DefaultSurfaceLeads  = []string{"1", "3", "12", "24"}
-	DefaultUpperAirLeads = []string{"1", "3", "6", "12"}
-	DefaultRadarLeads    = []string{"1", "3"}
-	DefaultCeilVisLeads  = []string{"1", "3"}
+	DefaultSurfaceLeads    = []string{"1", "3", "12", "24"}
+	DefaultUpperAirLeads   = []string{"1", "3", "6", "12"}
+	DefaultUpperAirTSLeads = []string{"1", "3", "6", "12"}
+	DefaultRadarLeads      = []string{"1", "3"}
+	DefaultCeilVisLeads    = []string{"1", "3"}
 )
 
 // SortLeadHours cleans, deduplicates, and sorts forecast lead strings in ascending numerical order.
