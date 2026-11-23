@@ -63,7 +63,7 @@ var Clusters = map[string]ClusterInfo{
 		CanonicalHost:   "gaea-c5.fairmont.rdhpcs.noaa.gov",
 		AliasCandidates: []string{"Gaeac5", "gaea-c5", "gaeac5", "c5", "Gaea", "gaea"},
 		Description:     "NOAA RDHPCS Gaea C5 (gaea51~56, /gpfs/f5)",
-		TimeoutInit:     60,
+		TimeoutInit:     120,
 		PromptRegex:     regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*.*?\]\s*[$#>]|[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*:[^$#>\n\r]*[$#>]|:~[>#])`),
 	},
 	"gaea-c6": {
@@ -71,7 +71,7 @@ var Clusters = map[string]ClusterInfo{
 		CanonicalHost:   "gaea-c6.fairmont.rdhpcs.noaa.gov",
 		AliasCandidates: []string{"Gaeac6", "gaea-c6", "gaeac6", "c6"},
 		Description:     "NOAA RDHPCS Gaea C6 (gaea61~66, /gpfs/f6)",
-		TimeoutInit:     60,
+		TimeoutInit:     120,
 		PromptRegex:     regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*.*?\]\s*[$#>]|[a-zA-Z0-9_\.\-]+@gaea\d+[\w\.\-]*:[^$#>\n\r]*[$#>]|:~[>#])`),
 	},
 	"gaea-c7": {
@@ -79,7 +79,7 @@ var Clusters = map[string]ClusterInfo{
 		CanonicalHost:   "gaea-c7.fairmont.rdhpcs.noaa.gov",
 		AliasCandidates: []string{"Gaeac7", "gaea-c7", "gaeac7", "c7"},
 		Description:     "NOAA RDHPCS Gaea C7 (gaea70~76, /gpfs/f7)",
-		TimeoutInit:     90,
+		TimeoutInit:     150,
 		PromptRegex:     regexp.MustCompile(`(?i)(\[[a-zA-Z0-9_\.\-]+@(gaea7\d|c7login\d|gaea\d+)[\w\.\-]*.*?\]\s*[$#>]|[a-zA-Z0-9_\.\-]+@(gaea7\d|c7login\d|gaea\d+)[\w\.\-]*:[^$#>\n\r]*[$#>]|:~[>#])`),
 	},
 	"hera": {

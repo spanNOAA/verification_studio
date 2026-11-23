@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/webview/webview_go"
+	"verification_studio/hpc"
 	"verification_studio/pipeline"
 )
 
@@ -238,6 +239,83 @@ func main() {
 
 	_ = w.Bind("openPathInOS", func(p string) {
 		openPath(p)
+	})
+
+	_ = w.Bind("getDetectedHPCClusters", func(modelsText string) string {
+		type DetectedHPCCluster struct {
+			Cluster     string `json:"cluster"`
+			DisplayName string `json:"display_name"`
+			ModelAlias  string `json:"model_alias"`
+			IsOnline    bool   `json:"is_online"`
+		}
+		models := pipeline.ParseModels(modelsText)
+		seen := make(map[string]bool)
+		var list []DetectedHPCCluster
+		for _, m := range models {
+			c := hpc.NormalizeCluster(m.Cluster, m.Path)
+			if c != "" && !seen[c] {
+				seen[c] = true
+				online := hpc.IsOnline(c)
+				displayName := c
+				if info, ok := hpc.Clusters[c]; ok {
+					parts := strings.Split(info.Description, "(")
+					displayName = strings.TrimSpace(parts[0])
+					if strings.HasPrefix(displayName, "NOAA RDHPCS ") {
+						displayName = strings.TrimSpace(displayName[12:])
+					}
+				}
+				list = append(list, DetectedHPCCluster{
+					Cluster:     c,
+					DisplayName: displayName,
+					ModelAlias:  m.Name,
+					IsOnline:    online,
+				})
+			}
+		}
+		data, _ := json.Marshal(list)
+		return string(data)
+	})
+
+	_ = w.Bind("testHPCPreConnectNative", func(cluster string) {
+		go func() {
+			sendOutput := func(format string, args ...any) {
+				msg := fmt.Sprintf(format, args...)
+				b, _ := json.Marshal(msg)
+				w.Dispatch(func() {
+					w.Eval(fmt.Sprintf("appendLog(%s)", string(b)))
+				})
+			}
+			sendOutput("\n>>> [HPC DIAGNOSTICS] Testing connection & auto-healing for [%s]...\n", cluster)
+			online := hpc.EnsureConnection(cluster, nil, func(s string) {
+				sendOutput("%s", s)
+			})
+			if online {
+				sendOutput("  [HPC DIAGNOSTICS] >>> Connection to [%s] verified healthy & active!\n\n", cluster)
+			} else {
+				sendOutput("  [HPC DIAGNOSTICS] Connection attempt for [%s] did not complete.\n\n", cluster)
+			}
+			w.Dispatch(func() {
+				w.Eval("refreshHPCClustersUI()")
+			})
+		}()
+	})
+
+	_ = w.Bind("pruneHPCSocketsNative", func() {
+		go func() {
+			sendOutput := func(format string, args ...any) {
+				msg := fmt.Sprintf(format, args...)
+				b, _ := json.Marshal(msg)
+				w.Dispatch(func() {
+					w.Eval(fmt.Sprintf("appendLog(%s)", string(b)))
+				})
+			}
+			sendOutput("\n>>> [HPC MAINTENANCE] Cleaning up stale sockets and disconnecting idle daemons...\n")
+			hpc.DisconnectAll()
+			sendOutput("  [HPC MAINTENANCE] Disconnected daemons and cleared stale sockets.\n\n")
+			w.Dispatch(func() {
+				w.Eval("refreshHPCClustersUI()")
+			})
+		}()
 	})
 
 	_ = w.Bind("stopPipelineNative", func() {

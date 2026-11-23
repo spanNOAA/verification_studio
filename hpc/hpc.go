@@ -129,6 +129,9 @@ func EnsureConnection(cluster string, models []mats.Model, logger ...func(string
 		return true
 	}
 
+	// Pre-flight self-healing: detect dynamic tunnel port, clear conflicting processes/keys, and prune stale sockets
+	PreflightSelfHeal(target, logMsg)
+
 	suggestedUser := findSuggestedUser(target, models)
 
 	selfExe, err := os.Executable()
@@ -161,7 +164,7 @@ func EnsureConnection(cluster string, models []mats.Model, logger ...func(string
 	defer cleanup()
 
 	t0 := time.Now()
-	for time.Since(t0) < 120*time.Second {
+	for time.Since(t0) < 240*time.Second {
 		if IsOnline(target) {
 			logMsg(fmt.Sprintf("  [HPC] >>> Prompt detected! Successfully connected to %s.\n", target))
 			return true
@@ -169,7 +172,7 @@ func EnsureConnection(cluster string, models []mats.Model, logger ...func(string
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	logMsg(fmt.Sprintf("  [HPC ERROR] Authentication for cluster '%s' timed out after 120s.\n", target))
+	logMsg(fmt.Sprintf("  [HPC ERROR] Authentication for cluster '%s' timed out after 240s.\n", target))
 	return false
 }
 

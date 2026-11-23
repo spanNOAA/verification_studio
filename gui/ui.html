@@ -874,7 +874,7 @@
                 <button type="button" class="btn btn-secondary btn-sm" onclick="clearModels()">🧹 Clear</button>
               </div>
             </div>
-            <textarea id="modelsText" class="form-control" rows="5" placeholder="Enter or paste experiments here, one per line...&#10;Supported formats:&#10;1. Experiment_ID - machine:path (e.g. RRFSv2_conus_3km_exp1 - gaeac6:/gpfs/f6/wrfruc/scratch/username/retros/exp1)&#10;2. Experiment_ID (e.g. RRFSv2_conus_3km_baseline)"></textarea>
+            <textarea id="modelsText" class="form-control" rows="5" oninput="onModelsTextInput()" placeholder="Enter or paste experiments here, one per line...&#10;Supported formats:&#10;1. Experiment_ID - machine:path (e.g. RRFSv2_conus_3km_exp1 - gaeac6:/gpfs/f6/wrfruc/scratch/username/retros/exp1)&#10;2. Experiment_ID (e.g. RRFSv2_conus_3km_baseline)"></textarea>
             <div class="form-hint">Format: 'Experiment_ID - machine:path' or simply 'Experiment_ID'. Machine supports gaeac5, gaeac6, gaeac7, gaea, hera, etc. Short aliases (e.g., generictquv, halfTerr, retv3, retv4) are extracted automatically, and remote synoptic radar plots are fetched via HPC as needed.</div>
           </div>
         </div>
@@ -1092,6 +1092,41 @@
           </div>
           
           <div id="radarBlockBody">
+            <!-- Dynamic Auto-Detected HPC Target & Health Strip (100% Zero-Config, no internal ports) -->
+            <div class="hpc-auto-strip" id="hpcAutoStrip" style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:10px 14px; margin-bottom:14px; display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                  <span style="font-size:12px; font-weight:700; color:#334155; display:flex; align-items:center; gap:5px;">
+                    <span>🔌</span> Remote HPC Target:
+                  </span>
+                  <div id="hpcClusterPillsContainer" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span style="color:#64748b; font-size:11.5px; font-style:italic;">(Auto-detecting from Experiments...)</span>
+                  </div>
+                </div>
+
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <button type="button" class="btn btn-primary btn-sm" id="btnTestHPC" style="padding:4px 10px; font-size:11.5px; font-weight:600;" onclick="onTestHPCPreConnect()">
+                    🩺 Test &amp; Pre-Connect
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:11.5px; font-weight:600;" onclick="onPruneHPCSockets()">
+                    🧹 Prune Sockets
+                  </button>
+                </div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#64748b; padding-top:6px; border-top:1px dashed #e2e8f0; flex-wrap:wrap; gap:8px;">
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; color:#475569;">
+                  <span>🛡️ <strong>Connection Guard Active:</strong></span>
+                  <span>✓ Auto-resolves port &amp; process conflicts</span>
+                  <span>✓ Auto-heals host key conflicts</span>
+                  <span>✓ Auto-prunes dead sockets</span>
+                </div>
+                <div style="color:#334155; font-weight:600;">
+                  ⏱️ Guard Timeout: <span style="background:#e2e8f0; padding:1px 5px; border-radius:3px;">240s (Resilient)</span>
+                </div>
+              </div>
+            </div>
+
             <div class="radar-creator-box">
               <div style="font-size:12px; font-weight:700; color:#1e293b; margin-bottom:6px;">
                 ➕ Add Verification Case (Select cycle date & hour to match forecast lead times):
@@ -1341,14 +1376,80 @@
   <script>
     const EXAMPLE_MODELS = `RRFSv2_conus_3km_exp1 - gaeac6:/gpfs/f6/wrfruc/scratch/username/retros/exp1\nRRFSv2_conus_3km_baseline`;
 
+    let lastDetectedClusters = [];
+
+    function onModelsTextInput() {
+      updateModelBadge();
+      refreshHPCClustersUI();
+    }
+
     function insertExampleModels() {
       document.getElementById('modelsText').value = EXAMPLE_MODELS;
       updateModelBadge();
+      refreshHPCClustersUI();
     }
 
     function clearModels() {
       document.getElementById('modelsText').value = '';
       updateModelBadge();
+      refreshHPCClustersUI();
+    }
+
+    function refreshHPCClustersUI() {
+      const container = document.getElementById('hpcClusterPillsContainer');
+      const btnTest = document.getElementById('btnTestHPC');
+      if (!container) return;
+
+      const modelsText = document.getElementById('modelsText').value;
+      if (!window.getDetectedHPCClusters) {
+        container.innerHTML = '<span style="color:#64748b; font-size:11.5px; font-style:italic;">(Local mode)</span>';
+        if (btnTest) btnTest.disabled = true;
+        return;
+      }
+
+      try {
+        const jsonStr = window.getDetectedHPCClusters(modelsText);
+        const list = JSON.parse(jsonStr) || [];
+        lastDetectedClusters = list;
+
+        if (list.length === 0) {
+          container.innerHTML = '<span style="color:#64748b; font-size:11.5px; font-style:italic;">(All models use local paths; no remote HPC connection required)</span>';
+          if (btnTest) btnTest.disabled = true;
+          return;
+        }
+
+        if (btnTest) btnTest.disabled = false;
+        container.innerHTML = list.map(c => `
+          <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:3px 9px; font-size:12px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+            <span style="width:7.5px; height:7.5px; border-radius:50%; background:${c.is_online ? '#22c55e' : '#f59e0b'}; display:inline-block;"></span>
+            <span style="font-weight:700; color:#0f172a;">${c.display_name}</span>
+            <span style="color:#64748b; font-size:11px;">(from ${c.model_alias})</span>
+            <span style="color:${c.is_online ? '#16a34a' : '#b45309'}; font-weight:600; font-size:11px; background:${c.is_online ? '#dcfce7' : '#fef3c7'}; padding:1px 6px; border-radius:4px;">
+              ${c.is_online ? 'Active Session' : 'Offline'}
+            </span>
+          </div>
+        `).join('');
+      } catch (e) {
+        container.innerHTML = '<span style="color:#64748b; font-size:11.5px;">(Ready)</span>';
+      }
+    }
+
+    function onTestHPCPreConnect() {
+      if (lastDetectedClusters.length === 0) {
+        alert('No remote HPC experiments detected in the Experiments input box.');
+        return;
+      }
+      for (const c of lastDetectedClusters) {
+        if (window.testHPCPreConnectNative) {
+          window.testHPCPreConnectNative(c.cluster);
+        }
+      }
+    }
+
+    function onPruneHPCSockets() {
+      if (window.pruneHPCSocketsNative) {
+        window.pruneHPCSocketsNative();
+      }
     }
 
     function updateModelBadge() {
@@ -2096,6 +2197,7 @@
       renderRadarCasesList();
       updateModelBadge();
       ['sfc', 'ua', 'ua_ts', 'radar', 'ceilvis'].forEach(renderFhrPills);
+      refreshHPCClustersUI();
     }, 50);
 
     let pipelineStartTime = null;

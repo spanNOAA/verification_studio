@@ -55,6 +55,7 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 	}
 
 	resolvedHost := ResolveSSHHost(clusterKey)
+	PreflightSelfHeal(clusterKey, func(s string) { fmt.Print(s) })
 	sshArgs := BuildSSHArgs(resolvedHost, candidateUser)
 
 	fmt.Printf("\n========================================================\n")
@@ -90,7 +91,7 @@ func StartInteractiveAuth(cluster, candidateUser string) error {
 	buf := make([]byte, 0, 8192)
 	readBuf := make([]byte, 4096)
 	startTime := time.Now()
-	maxTimeout := 120 * time.Second
+	maxTimeout := 240 * time.Second
 
 	for time.Since(startTime) < maxTimeout {
 		_ = ptmx.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
